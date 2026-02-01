@@ -1,8 +1,10 @@
 import json
 import os
+from LegionRules import LegionRules
 
 class LegionDatabase:
     def __init__(self):
+        self.rules = LegionRules
         self.units = {}
         self.upgrades = []
         self.command_cards = []
@@ -214,6 +216,12 @@ class LegionDatabase:
                     w_kw_list = []
                     for k, v in w.get("keywords", {}).items():
                         key_str = k.replace("-", " ").title()
+
+                        # Try to find German translation
+                        rule_kw = self.rules.get_keyword(key_str)
+                        if rule_kw and "german" in rule_kw:
+                            key_str = rule_kw["german"]
+
                         if v and str(v) != "":
                             w_kw_list.append(f"{key_str} {v}")
                         else:
@@ -235,6 +243,12 @@ class LegionDatabase:
                 unit_kw_list = []
                 for k, v in u.get("keywords", {}).items():
                     key_str = k.replace("-", " ").title()
+
+                    # Try to find German translation
+                    rule_kw = self.rules.get_keyword(key_str)
+                    if rule_kw and "german" in rule_kw:
+                        key_str = rule_kw["german"]
+
                     if v and str(v) != "":
                         unit_kw_list.append(f"{key_str} {v}")
                     else:
