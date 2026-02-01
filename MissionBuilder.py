@@ -125,11 +125,28 @@ class LegionMissionGenerator:
 
         tk.Label(frame_deploy_ctrl, text="Aufstellung:", bg="#eee").pack(side="left")
         self.combo_deploy = ttk.Combobox(frame_deploy_ctrl, values=[
-            "Battle Lines", "The Long March", "Disarray", "Major Offensive", "Danger Close", "Hemmed In"
+            "Battle Lines", "The Long March", "Disarray", "Major Offensive", "Danger Close", "Hemmed In",
+            "Hinterhalt (Ambush)", "Einkesselung (Encirclement)", "Nahkampf (Close Quarters)"
         ], state="readonly")
         self.combo_deploy.current(0)
         self.combo_deploy.pack(side="left", padx=5)
         self.combo_deploy.bind("<<ComboboxSelected>>", self.update_map)
+
+        # Mission / Objective Control
+        tk.Label(frame_deploy_ctrl, text="Mission:", bg="#eee").pack(side="left", padx=(10,0))
+        self.combo_mission = ttk.Combobox(frame_deploy_ctrl, values=[
+            "Kein Marker",
+            "Abfangen (Intercept)",
+            "Schlüsselpositionen (Key Positions)",
+            "Durchbruch (Breakthrough)",
+            "Eliminierung (Deathmatch)",
+            "Evakuierung (Hostage)",
+            "Vorräte bergen (Recover Supplies)",
+            "Sabotage"
+        ], state="readonly")
+        self.combo_mission.current(0)
+        self.combo_mission.pack(side="left", padx=5)
+        self.combo_mission.bind("<<ComboboxSelected>>", self.update_map)
 
         tk.Button(frame_deploy_ctrl, text="Zufällig", command=self.random_deploy, bg="#FF9800", fg="white").pack(side="left", padx=5)
 
@@ -147,8 +164,12 @@ class LegionMissionGenerator:
         self.update_map()
 
     def random_deploy(self):
-        opts = ["Battle Lines", "The Long March", "Disarray", "Major Offensive", "Danger Close", "Hemmed In"]
-        self.combo_deploy.set(random.choice(opts))
+        opts_dep = ["Battle Lines", "The Long March", "Disarray", "Major Offensive", "Danger Close", "Hemmed In", "Hinterhalt (Ambush)", "Einkesselung (Encirclement)", "Nahkampf (Close Quarters)"]
+        self.combo_deploy.set(random.choice(opts_dep))
+
+        opts_mis = ["Abfangen (Intercept)", "Schlüsselpositionen (Key Positions)", "Durchbruch (Breakthrough)", "Eliminierung (Deathmatch)", "Evakuierung (Hostage)", "Vorräte bergen (Recover Supplies)", "Sabotage"]
+        self.combo_mission.set(random.choice(opts_mis))
+
         self.update_map()
 
     def load_army(self, side):
@@ -299,6 +320,58 @@ class LegionMissionGenerator:
             self.canvas.create_rectangle(0, 0, strip, h, fill="#ffcdd2", outline="red")
             self.canvas.create_rectangle(w-strip, 0, w, h, fill="#ffcdd2", outline="red")
 
+        elif "Hinterhalt" in mode or "Ambush" in mode:
+            # Defender Center (Blue), Attacker Surround (Red)
+            # Center Box Range 1 away from edges?
+            # Or Center Box Size?
+            # Standard: Defender setup within Range 2 of center token?
+            # Let's do: Center Box (Blue), Everything else (Red)? Or Edges?
+            # Assume: Defender has a central zone. Attacker starts at edges.
+
+            # Blue Center
+            center_w = ft_to_px_w(2.0)
+            center_h = ft_to_px_h(1.0)
+            cx, cy = w/2, h/2
+
+            self.canvas.create_rectangle(cx - center_w/2, cy - center_h/2, cx + center_w/2, cy + center_h/2, fill="#bbdefb", outline="blue")
+            self.canvas.create_text(cx, cy, text="BLAU (Verteidiger)", fill="blue")
+
+            # Red Edges (Strip)
+            strip = ft_to_px_h(0.5)
+            self.canvas.create_rectangle(0, 0, w, strip, fill="#ffcdd2", outline="red") # Top
+            self.canvas.create_rectangle(0, h-strip, w, h, fill="#ffcdd2", outline="red") # Bottom
+            self.canvas.create_rectangle(0, 0, strip, h, fill="#ffcdd2", outline="red") # Left
+            self.canvas.create_rectangle(w-strip, 0, w, h, fill="#ffcdd2", outline="red") # Right
+
+        elif "Einkesselung" in mode or "Encirclement" in mode:
+            # Similar to Long March but Defender is pinched?
+            # Blue Center Strip. Red Left AND Right.
+
+            # Blue Center Strip
+            strip_w = ft_to_px_w(2.0)
+            cx = w/2
+            self.canvas.create_rectangle(cx - strip_w/2, 0, cx + strip_w/2, h, fill="#bbdefb", outline="blue")
+            self.canvas.create_text(cx, h/2, text="BLAU", fill="blue")
+
+            # Red Sides
+            side_w = ft_to_px_w(1.0)
+            self.canvas.create_rectangle(0, 0, side_w, h, fill="#ffcdd2", outline="red")
+            self.canvas.create_rectangle(w-side_w, 0, w, h, fill="#ffcdd2", outline="red")
+
+        elif "Nahkampf" in mode or "Close Quarters" in mode:
+            # Very close battle lines. Range 1 apart?
+            # Middle of board.
+            mid_h = h/2
+            zone_h = ft_to_px_h(1.0)
+
+            # Red Top (Ends at mid - 0.5)
+            self.canvas.create_rectangle(0, 0, w, mid_h - (zone_h/2), fill="#ffcdd2", outline="red")
+
+            # Blue Bottom (Starts at mid + 0.5)
+            self.canvas.create_rectangle(0, mid_h + (zone_h/2), w, h, fill="#bbdefb", outline="blue")
+
+            self.canvas.create_text(w/2, h/2, text="--- ENGAGEMENT ---", fill="#333")
+
         # Labels for Armies
         if self.blue_army:
             txt = f"{self.blue_army['faction']}\n({self.blue_army['name']})"
@@ -310,11 +383,73 @@ class LegionMissionGenerator:
             # Place in Red zone (approx Top Center usually)
             self.canvas.create_text(w/2, 20, text=txt, font=("bold"), fill="#b71c1c")
 
+        # Draw Objectives
+        mission = self.combo_mission.get()
+
+        # Helper for Token
+        def draw_token(x, y, label="?"):
+            r = 15
+            self.canvas.create_oval(x-r, y-r, x+r, y+r, fill="#66bb6a", outline="green", width=2)
+            self.canvas.create_text(x, y, text=label, font=("bold"))
+
+        if "Abfangen" in mission or "Intercept" in mission or "Schlüssel" in mission or "Key" in mission:
+            # 3 Points usually. Center, Left, Right?
+            # Range 2 from Center? Or Range 4 from each other?
+            # Center
+            draw_token(w/2, h/2, "C")
+            # Left/Right (approx)
+            draw_token(w/4, h/2, "L")
+            draw_token(3*w/4, h/2, "R")
+
+        elif "Durchbruch" in mission or "Breakthrough" in mission:
+            # Highlight Opponent Deployment Zones
+            # We assume user knows rules (score in enemy zone).
+            # Draw Arrows?
+            self.canvas.create_line(w/2, h-50, w/2, 50, arrow=tk.LAST, width=5, fill="orange")
+            self.canvas.create_text(w/2 + 20, h/2, text="ZIEL: Gegnerische Zone", fill="orange", angle=90)
+
+        elif "Eliminierung" in mission or "Deathmatch" in mission:
+            # Skull Icon or text
+            self.canvas.create_text(w/2, h/2, text="☠ KILL ☠", font=("Arial", 30, "bold"), fill="red")
+
+        elif "Evakuierung" in mission or "Hostage" in mission:
+            # Hostage in deployment zone?
+            # 1 Blue Hostage in Red Zone, 1 Red Hostage in Blue Zone?
+            # Or Hostage starts with Player?
+            # Usually Hostage Exchange: Unit carries it.
+            # Draw Token in Deployment Zones
+            draw_token(w/2, 40, "H (Rot)")
+            draw_token(w/2, h-40, "H (Blau)")
+
+        elif "Vorräte" in mission or "Recover" in mission:
+            # Central Box (Range 1?) -> 5 Tokens usually
+            # Center Token + 4 around it?
+            cx, cy = w/2, h/2
+            draw_token(cx, cy, "C")
+            off = ft_to_px_w(1.0)
+            draw_token(cx-off, cy, "1")
+            draw_token(cx+off, cy, "2")
+            draw_token(cx, cy-off, "3")
+            draw_token(cx, cy+off, "4")
+
+        elif "Sabotage" in mission:
+            # Vaps: 2 for Blue, 2 for Red.
+            # Blue Vaps in Blue Territory
+            draw_token(w/4, h-50, "V")
+            draw_token(3*w/4, h-50, "V")
+
+            # Red Vaps
+            draw_token(w/4, 50, "V")
+            draw_token(3*w/4, 50, "V")
+
     def generate_prompt(self):
         # Daten sammeln
         fraktionen_gewaehlt = [k for k, v in self.var_fraktionen.items() if v.get()]
         terrain_gewaehlt = [k for k, v in self.var_gelaende.items() if v.get()]
         punkte = self.entry_punkte.get() if self.entry_punkte.get() else "800"
+
+        deploy = self.combo_deploy.get()
+        mission = self.combo_mission.get()
 
         # Validierung
         if not fraktionen_gewaehlt:
@@ -331,12 +466,14 @@ class LegionMissionGenerator:
             f"**Rahmenbedingungen:**\n"
             f"- **Punkte:** {punkte} Punkte pro Seite.\n"
             f"- **Beteiligte Fraktionen:** {str_fraktionen}.\n"
-            f"- **Gelände-Setting:** {str_terrain}.\n\n"
+            f"- **Gelände-Setting:** {str_terrain}.\n"
+            f"- **Aufstellung:** {deploy}.\n"
+            f"- **Mission/Objektive:** {mission}.\n\n"
             f"**Anforderungen an die Mission:**\n"
             f"1. **Narrativer Hintergrund:** Erstelle eine Story, die genau erklärt, warum diese Fraktionen in diesem spezifischen Gelände ({str_terrain}) kämpfen.\n"
-            f"2. **Schlachtfeld:** Beschreibe den Aufbau. Welche spezifischen Geländestücke (passend zum gewählten Setting) werden benötigt und wie beeinflussen sie Sichtlinien und Deckung?\n"
-            f"3. **Ziele:** Definiere Primär- und Sekundärziele.\n"
-            f"4. **Sonderregeln:** Erfinde 1-2 Umwelt-Regeln, die typisch für dieses Gelände sind (z.B. Sandsturm bei Wüste, Kälte bei Schnee, enge Gassen bei Stadt).\n"
+            f"2. **Schlachtfeld:** Beschreibe den Aufbau passend zur Aufstellung '{deploy}'. Welche spezifischen Geländestücke werden benötigt?\n"
+            f"3. **Ziele:** Beschreibe die Mechanik für die Mission '{mission}'. Wie punkten die Spieler?\n"
+            f"4. **Sonderregeln:** Erfinde 1-2 Umwelt-Regeln, die typisch für dieses Gelände sind.\n"
             f"5. **Siegbedingungen:** Nenne die Bedingungen für den Sieg.\n\n"
             f"Antworte auf Deutsch und formatiere die Antwort übersichtlich."
         )
