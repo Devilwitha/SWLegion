@@ -26,7 +26,7 @@ Builder.load_string('''
 <UnitListItem>:
     orientation: 'horizontal'
     size_hint_y: None
-    height: '48dp'
+    height: '60dp'
     padding: '5dp'
     spacing: '5dp'
     canvas.before:
@@ -41,14 +41,16 @@ Builder.load_string('''
         text_size: self.size
         halign: 'left'
         valign: 'middle'
-        size_hint_x: 0.7
+        size_hint_x: 0.6
     Label:
         text: root.points_txt
         color: (0, 0, 0, 1)
         size_hint_x: 0.2
     Button:
         text: '+'
-        size_hint_x: 0.1
+        size_hint_x: None
+        width: '50dp'
+        background_color: (0, 0.7, 0, 1)
         on_release: root.on_add_btn()
 
 <ArmyListItem>:
@@ -114,15 +116,27 @@ class UnitListItem(RecycleDataViewBehavior, BoxLayout):
 
     def refresh_view_attrs(self, rv, index, data):
         self.index = index
-        self.text = data['text']
-        self.points_txt = str(data['points'])
+        self.text = data.get('text', '')
+        self.points_txt = str(data.get('points', 0))
         return super(UnitListItem, self).refresh_view_attrs(rv, index, data)
+
+    def on_touch_down(self, touch):
+        if self.collide_point(*touch.pos):
+            # If we touch the button, let the button handle it.
+            # But if we touch the label area, Kivy might propagate it.
+            # We don't have a specific 'click' handler for the item itself,
+            # so we just ensure we call super to let children (Button) get events.
+            pass
+        return super(UnitListItem, self).on_touch_down(touch)
 
     def on_add_btn(self):
         # Trigger popup in parent screen
-        app = App.get_running_app()
-        screen = app.root.get_screen('army_builder')
-        screen.open_unit_config(self.text)
+        try:
+            app = App.get_running_app()
+            screen = app.root.get_screen('army_builder')
+            screen.open_unit_config(self.text)
+        except Exception as e:
+            logging.error(f"Error opening config: {e}")
 
 class ArmyListItem(RecycleDataViewBehavior, BoxLayout):
     text = StringProperty("")
@@ -253,7 +267,13 @@ class ArmyBuilderScreen(Screen):
 
         data = []
         for u in units_sorted:
-            data.append({'text': u['name'], 'points': u['points']})
+            # We must pass 'text' and 'points' explicitly for UnitListItem.
+            # Using 'root.text' in KV binds to the property 'text' of the widget instance.
+            data.append({
+                'text': u['name'],
+                'points': u['points'],
+                'points_txt': str(u['points']) # Pre-convert to string for safety
+            })
         self.rv_units.data = data
 
     def open_unit_config(self, unit_name):
@@ -306,31 +326,44 @@ class ArmyBuilderScreen(Screen):
         popup = Popup(title="Einheit Konfigurieren", content=content, size_hint=(0.9, 0.9))
 
         def confirm(instance):
-            total_cost = unit_data["points"]
-            chosen_upgrades_list = []
-            base_minis = unit_data.get("minis", 1)
-            extra_minis = 0
+            try:
+                total_cost = unit_data["points"]
+                chosen_upgrades_list = []
+                base_minis = unit_data.get("minis", 1)
+                extra_minis = 0
 
-            for sel in selectors:
-                val = sel['spinner'].text
-                if val != "-":
-                    upg = sel['map'][val]
-                    total_cost += upg['points']
-                    chosen_upgrades_list.append(val)
-                    if upg.get("adds_mini"):
-                        extra_minis += 1
+                for sel in selectors:
+                    val = sel['spinner'].text
+                    if val != "-" and val in sel['map']:
+                        upg = sel['map'][val]
+                        total_cost += upg['points']
+                        chosen_upgrades_list.append(val)
+                        if upg.get("adds_mini"):
+                            extra_minis += 1
 
-            self.current_army_list.append({
-                "name": unit_name,
-                "upgrades": chosen_upgrades_list,
-                "points": total_cost,
-                "base_points": unit_data["points"],
-                "minis": base_minis + extra_minis
-            })
-            self.refresh_army_view()
-            popup.dismiss()
-            # Switch to list tab
-            self.tabs.switch_to(self.tabs.tab_list[0] if self.tabs.tab_list[0].text == "Meine Liste" else self.tabs.tab_list[1])
+                self.current_army_list.append({
+                    "name": unit_name,
+                    "upgrades": chosen_upgrades_list,
+                    "points": total_cost,
+                    "base_points": unit_data["points"],
+                    "minis": base_minis + extra_minis
+                })
+                self.refresh_army_view()
+                popup.dismiss()
+
+                # Robust Tab Switching
+                # tab_list indices might vary based on definition order.
+                # Use reference self.tabs (TabbedPanel) and its children or simply look for title.
+                target_tab = None
+                for tab in self.tabs.tab_list:
+                    if tab.text == "Meine Liste":
+                        target_tab = tab
+                        break
+
+                if target_tab:
+                    self.tabs.switch_to(target_tab)
+            except Exception as e:
+                logging.error(f"Error adding unit: {e}")
 
         btn_add.bind(on_release=confirm)
         popup.open()
@@ -343,7 +376,8 @@ class ArmyBuilderScreen(Screen):
             data.append({
                 'text': u['name'],
                 'details': upg_str,
-                'points': u['points']
+                'points': u['points'],
+                'points_txt': str(u['points']) # Explicit for binding
             })
             self.total_points += u['points']
 
