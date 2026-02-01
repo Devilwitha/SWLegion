@@ -31,7 +31,7 @@ Builder.load_string('''
     spacing: '5dp'
     canvas.before:
         Color:
-            rgba: (0.9, 0.9, 0.9, 1) if self.selected else (1, 1, 1, 1)
+            rgba: (1, 1, 1, 1)
         Rectangle:
             pos: self.pos
             size: self.size
@@ -48,8 +48,7 @@ Builder.load_string('''
         size_hint_x: 0.2
     Button:
         text: '+'
-        size_hint_x: None
-        width: '50dp'
+        size_hint_x: 0.2
         background_color: (0, 0.7, 0, 1)
         on_release: root.on_add_btn()
 
@@ -197,8 +196,8 @@ class ArmyBuilderScreen(Screen):
         # Filter (Rank) - Optional, for now just list all
 
         # RecycleView for Units
-        self.rv_units = RecycleView(viewclass='UnitListItem')
-        self.rv_units_layout = RecycleBoxLayout(default_size=(None, dp(48)), default_size_hint=(1, None), size_hint_y=None, orientation='vertical')
+        self.rv_units = RecycleView(viewclass='UnitListItem', size_hint=(1, 1))
+        self.rv_units_layout = RecycleBoxLayout(default_size=(None, dp(60)), default_size_hint=(1, None), size_hint_y=None, orientation='vertical')
         self.rv_units_layout.bind(minimum_height=self.rv_units_layout.setter('height'))
         self.rv_units.add_widget(self.rv_units_layout)
         lib_layout.add_widget(self.rv_units)
@@ -258,9 +257,13 @@ class ArmyBuilderScreen(Screen):
         # Let's just update the library list.
 
     def update_unit_list(self):
-        if not self.current_faction or not self.db: return
+        if not self.current_faction or not self.db:
+            logging.warning("Update Unit List: No faction or DB")
+            return
 
         units = self.db.units.get(self.current_faction, [])
+        logging.info(f"Found {len(units)} units for {self.current_faction}")
+
         # Sort by rank
         order = {"Commander": 1, "Operative": 2, "Corps": 3, "Special Forces": 4, "Support": 5, "Heavy": 6}
         units_sorted = sorted(units, key=lambda x: order.get(x["rank"], 99))
@@ -275,6 +278,7 @@ class ArmyBuilderScreen(Screen):
                 'points_txt': str(u['points']) # Pre-convert to string for safety
             })
         self.rv_units.data = data
+        self.rv_units.refresh_from_data()
 
     def open_unit_config(self, unit_name):
         if not self.current_faction: return
@@ -489,7 +493,7 @@ class ArmyBuilderScreen(Screen):
         Clipboard.copy(text)
         # Feedback?
 
-    def open_deck_builder(self):
+    def open_deck_builder(self, instance):
         if not self.current_faction: return
 
         # Popup for deck building
