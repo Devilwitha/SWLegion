@@ -69,12 +69,14 @@ class GameCompanion:
         self.tree_opponent = self.create_unit_tree(self.frame_opponent)
 
     def create_unit_tree(self, parent):
-        cols = ("Name", "HP", "Status")
+        cols = ("Name", "Minis", "HP", "Status")
         tree = ttk.Treeview(parent, columns=cols, show="headings")
         tree.heading("Name", text="Einheit")
+        tree.heading("Minis", text="Fig.")
         tree.heading("HP", text="HP")
         tree.heading("Status", text="Status")
-        tree.column("Name", width=150)
+        tree.column("Name", width=140)
+        tree.column("Minis", width=30, anchor="center")
         tree.column("HP", width=40, anchor="center")
         tree.column("Status", width=60)
         tree.pack(fill="both", expand=True)
@@ -107,6 +109,16 @@ class GameCompanion:
                     full_unit["current_hp"] = full_unit["hp"]
                     full_unit["activated"] = False
                     full_unit["suppression"] = 0
+
+                    # Minis berechnen falls nicht im Save (Kompatibilität)
+                    if "minis" not in full_unit:
+                        base = db_unit.get("minis", 1)
+                        extra = 0
+                        # Check upgrades in 'item' (das gespeicherte Objekt hat 'upgrades' Liste von Strings)
+                        # Leider haben wir hier nur Strings "Name (Punkte)". Wir müssten matchen.
+                        # Vereinfachung: Wir nehmen base wenn nicht gespeichert.
+                        full_unit["minis"] = base
+
                     enriched_units.append(full_unit)
                 else:
                     print(f"Warnung: Einheit {item['name']} nicht in DB gefunden.")
@@ -134,7 +146,8 @@ class GameCompanion:
             tree.delete(item)
         for u in units:
             status = "Bereit" if not u["activated"] else "Aktiviert"
-            tree.insert("", "end", values=(u["name"], f"{u['current_hp']}/{u['hp']}", status))
+            minis = u.get("minis", 1)
+            tree.insert("", "end", values=(u["name"], minis, f"{u['current_hp']}/{u['hp']}", status))
 
     def init_game(self):
         if not self.player_army["units"] and not self.opponent_army["units"]:
