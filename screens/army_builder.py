@@ -196,7 +196,10 @@ class ArmyBuilderScreen(Screen):
         # Filter (Rank) - Optional, for now just list all
 
         # RecycleView for Units
-        self.rv_units = RecycleView(viewclass='UnitListItem', size_hint=(1, 1))
+        # Pass the class object directly to ensure Python logic (refresh_view_attrs) is used
+        self.rv_units = RecycleView(viewclass=UnitListItem, size_hint=(1, 1))
+        # Important: width of items must be handled. default_size key is (width, height).
+        # We want width=1.0 (size_hint) so we shouldn't set fixed width in default_size if using size_hint_x=1 in item.
         self.rv_units_layout = RecycleBoxLayout(default_size=(None, dp(60)), default_size_hint=(1, None), size_hint_y=None, orientation='vertical')
         self.rv_units_layout.bind(minimum_height=self.rv_units_layout.setter('height'))
         self.rv_units.add_widget(self.rv_units_layout)
@@ -209,7 +212,7 @@ class ArmyBuilderScreen(Screen):
         tab_list = TabbedPanelItem(text="Meine Liste")
         list_layout = BoxLayout(orientation='vertical')
 
-        self.rv_army = RecycleView(viewclass='ArmyListItem')
+        self.rv_army = RecycleView(viewclass=ArmyListItem, size_hint=(1, 1))
         self.rv_army_layout = RecycleBoxLayout(default_size=(None, dp(60)), default_size_hint=(1, None), size_hint_y=None, orientation='vertical')
         self.rv_army_layout.bind(minimum_height=self.rv_army_layout.setter('height'))
         self.rv_army.add_widget(self.rv_army_layout)
@@ -394,7 +397,7 @@ class ArmyBuilderScreen(Screen):
             del self.current_army_list[index]
             self.refresh_army_view()
 
-    def save_army_dialog(self):
+    def save_army_dialog(self, instance):
         # Since we don't have standard OS dialogs easily on Android without Plyer,
         # we'll implement a simple Popup with a TextInput for filename.
 
@@ -440,7 +443,7 @@ class ArmyBuilderScreen(Screen):
         btn_save.bind(on_release=do_save)
         popup.open()
 
-    def load_army_dialog(self):
+    def load_army_dialog(self, instance):
         # Simple File Chooser Popup
         content = BoxLayout(orientation='vertical')
 
@@ -479,7 +482,7 @@ class ArmyBuilderScreen(Screen):
         btn_load.bind(on_release=do_load)
         popup.open()
 
-    def export_to_clipboard(self):
+    def export_to_clipboard(self, instance):
         text = f"STAR WARS LEGION LISTE\nFraktion: {self.current_faction}\nGesamtpunkte: {self.total_points}\n"
         text += "="*40 + "\n\n"
 
