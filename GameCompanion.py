@@ -44,6 +44,9 @@ class GameCompanion:
 
         tk.Label(top_frame, text="Spiel-Begleiter", fg="white", bg="#333", font=("Segoe UI", 12, "bold")).pack(side=tk.LEFT, padx=10)
 
+        btn_mission = tk.Button(top_frame, text="LADE MISSION", bg="#4CAF50", fg="white", command=self.load_mission)
+        btn_mission.pack(side=tk.LEFT, padx=20)
+
         btn_load_p = tk.Button(top_frame, text="Lade Spieler-Armee", bg="#2196F3", fg="white", command=lambda: self.load_army(True))
         btn_load_p.pack(side=tk.LEFT, padx=20)
 
@@ -97,7 +100,18 @@ class GameCompanion:
         return tree
 
     def load_army(self, is_player):
+        # Determine initial directory based on mission or base folder
         initial_dir = "Armeen"
+
+        # Try to match faction from mission
+        if self.mission_data:
+            target_faction = self.mission_data.get("blue_faction") if is_player else self.mission_data.get("red_faction")
+            if target_faction:
+                # Check if folder exists
+                path = os.path.join(initial_dir, target_faction)
+                if os.path.exists(path):
+                    initial_dir = path
+
         if not os.path.exists(initial_dir):
             os.makedirs(initial_dir)
 
@@ -176,30 +190,66 @@ class GameCompanion:
         # Start Setup Phase
         self.start_setup_phase()
 
+    def load_mission(self):
+        initial_dir = "Missions"
+        if not os.path.exists(initial_dir): os.makedirs(initial_dir)
+
+        file_path = filedialog.askopenfilename(initialdir=initial_dir, title="Mission laden", filetypes=[("JSON", "*.json")])
+        if not file_path: return
+
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                self.mission_data = json.load(f)
+
+            # Refresh Setup if in Setup Phase
+            if self.current_phase == "Setup":
+                for widget in self.frame_center.winfo_children(): widget.destroy()
+                self.start_setup_phase()
+
+            messagebox.showinfo("Erfolg", "Mission geladen! Armee-Laden öffnet nun automatisch den richtigen Ordner.")
+
+        except Exception as e:
+            messagebox.showerror("Fehler", f"Konnte Mission nicht laden: {e}")
+
     def start_setup_phase(self):
         self.current_phase = "Setup"
         tk.Label(self.frame_center, text="Phase: Spielvorbereitung", font=("Segoe UI", 20, "bold"), bg="#fafafa").pack(pady=20)
 
-        info_frame = tk.Frame(self.frame_center, bg="#fafafa")
-        info_frame.pack(pady=10)
+        # Mission Info
+        info_frame = tk.Frame(self.frame_center, bg="#e1f5fe", relief="ridge", bd=2, padx=10, pady=10)
+        info_frame.pack(pady=10, fill="x", padx=20)
+
+        if self.mission_data:
+            m = self.mission_data
+            txt = (f"MISSION: {m.get('mission_type', '-')}\n"
+                   f"AUFSTELLUNG: {m.get('deployment', '-')}\n"
+                   f"PUNKTE: {m.get('points', '-')}\n\n"
+                   f"SPIELER (BLAU): {m.get('blue_faction', '-')}\n"
+                   f"GEGNER (ROT): {m.get('red_faction', '-')}")
+            tk.Label(info_frame, text=txt, font=("Consolas", 10), justify="left", bg="#e1f5fe").pack()
+        else:
+            tk.Label(info_frame, text="Keine Mission geladen.\nNutze 'LADE MISSION' oben.", font=("italic"), bg="#e1f5fe").pack()
+            tk.Button(info_frame, text="Mission laden", command=self.load_mission, bg="#2196F3", fg="white").pack(pady=5)
+
+        # Deck Status
+        deck_frame = tk.Frame(self.frame_center, bg="#fafafa")
+        deck_frame.pack(pady=10)
+
+        self.lbl_setup_status = tk.Label(deck_frame, text="Bitte wähle deine Kommandokarten (Hand von 7 Karten).", font=("Segoe UI", 12), bg="#fafafa")
+        self.lbl_setup_status.pack()
 
         pre_loaded_cards = self.player_army.get("command_cards", [])
 
         if pre_loaded_cards and len(pre_loaded_cards) == 7:
-            self.lbl_setup_status = tk.Label(info_frame, text="Kommandokarten aus Armeeliste geladen (7 Karten).", font=("Segoe UI", 12), fg="green", bg="#fafafa")
-            self.lbl_setup_status.pack()
+            self.lbl_setup_status.config(text="Kommandokarten aus Armeeliste geladen (7 Karten).", fg="green")
             self.player_hand = pre_loaded_cards
 
-            # Optional: Allow edit?
-            # For now, just proceed button
+            # Ready Button
             self.btn_finish_setup = tk.Button(self.frame_center, text="Spiel starten", command=self.finish_setup, bg="#4CAF50", fg="white", font=("Segoe UI", 14, "bold"))
             self.btn_finish_setup.pack(pady=20)
 
         else:
             # Legacy / Manual
-            self.lbl_setup_status = tk.Label(info_frame, text="Bitte wähle deine Kommandokarten (Hand von 7 Karten).", font=("Segoe UI", 12), bg="#fafafa")
-            self.lbl_setup_status.pack()
-
             btn_deck = tk.Button(self.frame_center, text="Kommandokarten wählen", command=self.open_deck_builder, bg="#2196F3", fg="white", font=("Segoe UI", 12))
             btn_deck.pack(pady=20)
 

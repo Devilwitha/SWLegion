@@ -60,7 +60,7 @@ class LegionMissionGenerator:
 
         for frak in self.fraktionen:
             var = tk.BooleanVar()
-            chk = tk.Checkbutton(frame_fraktionen, text=frak, variable=var, anchor="w")
+            chk = tk.Checkbutton(frame_fraktionen, text=frak, variable=var, anchor="w", command=self.update_faction_combos)
             chk.pack(fill="x", padx=5)
             self.var_fraktionen[frak] = var
 
@@ -150,15 +150,28 @@ class LegionMissionGenerator:
 
         tk.Button(frame_deploy_ctrl, text="Zufällig", command=self.random_deploy, bg="#FF9800", fg="white").pack(side="left", padx=5)
 
-        # Army Loader Buttons
+        # Faction Assignment
         frame_armies = tk.Frame(frame_map, bg="#eee")
         frame_armies.pack(fill="x", pady=10)
 
-        self.btn_load_blue = tk.Button(frame_armies, text="Lade Armee BLAU (Unten)", command=lambda: self.load_army("Blue"), bg="#2196F3", fg="white", width=25)
-        self.btn_load_blue.pack(side="left", padx=10)
+        # Blue Faction Selector
+        f_blue = tk.Frame(frame_armies, bg="#eee")
+        f_blue.pack(side="left", padx=10)
+        tk.Label(f_blue, text="Fraktion BLAU (Spieler)", fg="blue", bg="#eee", font=("bold")).pack()
+        self.combo_blue = ttk.Combobox(f_blue, state="readonly", width=30)
+        self.combo_blue.pack()
+        self.combo_blue.bind("<<ComboboxSelected>>", self.update_map)
 
-        self.btn_load_red = tk.Button(frame_armies, text="Lade Armee ROT (Oben)", command=lambda: self.load_army("Red"), bg="#F44336", fg="white", width=25)
-        self.btn_load_red.pack(side="right", padx=10)
+        # Red Faction Selector
+        f_red = tk.Frame(frame_armies, bg="#eee")
+        f_red.pack(side="right", padx=10)
+        tk.Label(f_red, text="Fraktion ROT (Gegner)", fg="red", bg="#eee", font=("bold")).pack()
+        self.combo_red = ttk.Combobox(f_red, state="readonly", width=30)
+        self.combo_red.pack()
+        self.combo_red.bind("<<ComboboxSelected>>", self.update_map)
+
+        # Save Mission
+        tk.Button(frame_map, text="💾 Mission Speichern (für Game Companion)", command=self.save_mission, bg="#4CAF50", fg="white", font=("bold", 12)).pack(pady=20)
 
         # Draw Initial
         self.update_map()
@@ -172,34 +185,53 @@ class LegionMissionGenerator:
 
         self.update_map()
 
-    def load_army(self, side):
-        initial_dir = "Armeen"
+    def update_faction_combos(self):
+        # Get selected factions from checkboxes
+        selected = [f for f, var in self.var_fraktionen.items() if var.get()]
+
+        # Get list of army files for these factions?
+        # User requirement: "anstelle von armee laden nim lieber die beteiligten armeen"
+        # Simplification: Allow selecting the *Faction* itself to assign to a side.
+        # GameCompanion will then load from that Faction folder.
+
+        # Populate Comboboxes
+        self.combo_blue['values'] = selected
+        self.combo_red['values'] = selected
+
+        if selected:
+            if not self.combo_blue.get(): self.combo_blue.current(0)
+            if len(selected) > 1 and not self.combo_red.get(): self.combo_red.current(1)
+            elif not self.combo_red.get(): self.combo_red.current(0)
+
+        self.update_map()
+
+    def save_mission(self):
+        # Gather data
+        data = {
+            "deployment": self.combo_deploy.get(),
+            "mission_type": self.combo_mission.get(),
+            "blue_faction": self.combo_blue.get(),
+            "red_faction": self.combo_red.get(),
+            "points": self.entry_punkte.get(),
+            "terrain": [k for k,v in self.var_gelaende.items() if v.get()],
+            "prompt_text": self.txt_output.get("1.0", tk.END)
+        }
+
+        if not data["blue_faction"] or not data["red_faction"]:
+            messagebox.showwarning("Fehler", "Bitte weise beiden Seiten eine Fraktion zu.")
+            return
+
+        initial_dir = "Missions"
         if not os.path.exists(initial_dir): os.makedirs(initial_dir)
 
-        file_path = filedialog.askopenfilename(initialdir=initial_dir, title=f"Armee {side} laden", filetypes=[("JSON", "*.json")])
-        if not file_path: return
-
-        try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-
-            faction = data.get("faction", "Unknown")
-            # Extract name from filename or first unit?
-            name = os.path.basename(file_path).replace(".json", "")
-
-            army_data = {"faction": faction, "name": name}
-
-            if side == "Blue":
-                self.blue_army = army_data
-                self.btn_load_blue.config(text=f"BLAU: {faction}")
-            else:
-                self.red_army = army_data
-                self.btn_load_red.config(text=f"ROT: {faction}")
-
-            self.update_map()
-
-        except Exception as e:
-            messagebox.showerror("Fehler", f"Konnte Datei nicht laden: {e}")
+        file_path = filedialog.asksaveasfilename(initialdir=initial_dir, title="Mission speichern", defaultextension=".json", filetypes=[("JSON", "*.json")])
+        if file_path:
+            try:
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    json.dump(data, f, indent=4, ensure_ascii=False)
+                messagebox.showinfo("Gespeichert", f"Mission gespeichert in:\n{file_path}")
+            except Exception as e:
+                messagebox.showerror("Fehler", f"Fehler beim Speichern: {e}")
 
     def update_map(self, event=None):
         self.current_deployment = self.combo_deploy.get()
@@ -372,15 +404,16 @@ class LegionMissionGenerator:
 
             self.canvas.create_text(w/2, h/2, text="--- ENGAGEMENT ---", fill="#333")
 
-        # Labels for Armies
-        if self.blue_army:
-            txt = f"{self.blue_army['faction']}\n({self.blue_army['name']})"
-            # Place in Blue zone (approx Bottom Center usually)
+        # Labels for Armies (Factions)
+        blue_fac = self.combo_blue.get()
+        red_fac = self.combo_red.get()
+
+        if blue_fac:
+            txt = f"BLAU: {blue_fac}"
             self.canvas.create_text(w/2, h-20, text=txt, font=("bold"), fill="#0d47a1")
 
-        if self.red_army:
-            txt = f"{self.red_army['faction']}\n({self.red_army['name']})"
-            # Place in Red zone (approx Top Center usually)
+        if red_fac:
+            txt = f"ROT: {red_fac}"
             self.canvas.create_text(w/2, 20, text=txt, font=("bold"), fill="#b71c1c")
 
         # Draw Objectives
