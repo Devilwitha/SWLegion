@@ -158,6 +158,15 @@ class LegionDatabase:
                     "speed": 2, "defense": "White", "surge": {"attack": "hit", "defense": "block"},
                     "weapons": [{"name": "MS-4 Twin Blaster Cannon", "range": [1, 4], "dice": {"red": 2, "black": 2, "white": 2}, "keywords": ["Fixed: Front", "Impact 3"]}]
                 },
+                {
+                    "name": "Boba Fett (Operative)", "points": 120, "rank": "Operative", "hp": 5, "courage": 3,
+                    "slots": ["Training", "Training", "Gear", "Gear", "Comms"], "info": "Bounty, Jump 2, Impervious, Arsenal 2",
+                    "speed": 2, "defense": "Red", "surge": {"attack": "crit", "defense": "block"},
+                    "weapons": [
+                        {"name": "EE-3 Carbine (Custom)", "range": [1, 3], "dice": {"red": 3, "black": 0, "white": 3}, "keywords": ["Pierce 1", "Sharpshooter 2"]},
+                        {"name": "Wrist Rocket", "range": [1, 2], "dice": {"red": 0, "black": 2, "white": 0}, "keywords": ["Impact 1"]}
+                    ]
+                },
             ],
             "Rebellenallianz": [
                 {

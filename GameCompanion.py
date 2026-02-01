@@ -401,86 +401,15 @@ class GameCompanion:
                     keywords.extend(wd["keywords"])
 
             # WÜRFELN (Angriff)
-            results = {"crit": 0, "hit": 0, "blank": 0}
-            # Simuliere Würfe
-            # Red: 1/8 Crit, 5/8 Hit, 2/8 Blank -> Wait, Red is best.
-            # Real Legion Dice:
-            # Red: 1 Crit, 6 Hit, 1 Blank (Total 8) -> Wait no.
-            # Correct Stats:
-            # Red (Attack): 1 Crit, 5 Hit, 2 Blank.
-            # Black (Attack): 1 Crit, 3 Hit, 4 Blank.
-            # White (Attack): 1 Crit, 1 Hit, 6 Blank.
-
-            # Helper for rolling
-            def roll_die(color):
-                r = random.randint(1, 8)
-                if color == "red":
-                    return "crit" if r == 8 else ("hit" if r >= 3 else "blank")
-                elif color == "black":
-                    return "crit" if r == 8 else ("hit" if r >= 5 else "blank")
-                elif color == "white":
-                    return "crit" if r == 8 else ("hit" if r == 7 else "blank")
-                return "blank"
-
-            for color, count in pool.items():
-                for _ in range(count):
-                    res = roll_die(color)
-                    results[res] += 1
-
-            log_text = f"Würfelpool: {pool}\n"
-            log_text += f"Wurf: {results}\n"
-
-            # MODS: Aim (Reroll Blanks -> simple assumption: reroll 2 dice per aim)
-            aims = var_aim.get()
-            if aims > 0 and results["blank"] > 0:
-                rerolls = min(results["blank"], aims * 2) # Standard: 2 Würfel pro Aim
-                log_text += f"Zielen ({aims}): {rerolls} Blanks neu gewürfelt...\n"
-                results["blank"] -= rerolls
-                # Welche Farbe rerollen? Einfachheitshalber nehmen wir den Durchschnitt oder die beste Farbe die im Pool war.
-                # Simplification: Wir werfen neu basierend auf der Verteilung des Pools
-                total_dice = sum(pool.values())
-                if total_dice > 0:
-                    for _ in range(rerolls):
-                        # Ziehe zufällige Farbe aus dem ursprünglichen Pool (gewichtet)
-                        choices = []
-                        for c, n in pool.items(): choices.extend([c]*n)
-                        if choices:
-                            res = roll_die(random.choice(choices))
-                            results[res] += 1
-
-                log_text += f"Nach Reroll: {results}\n"
-
-            # Offensive Surge Conversion
-            # Check unit surge chart
-            surge_chart = unit.get("surge", {})
-            atk_surge = surge_chart.get("attack") # "hit", "crit" oder None
-            # Critical Keyword?
-            # (Vereinfachung: Wir nehmen an Surge -> Hit wenn nicht anders definiert, viele Einheiten haben das nicht standardmäßig)
-
-            hits = results["hit"]
-            crits = results["crit"]
-            surges_rolled = 0 # Legion Attack dice don't have "surge" symbol result separate from Hit/Crit?
-            # WAIT. Legion Attack Dice Symbols:
-            # Red: 1 Crit, 5 Hit, 1 Surge, 1 Blank. (8 sides)
-            # Black: 1 Crit, 3 Hit, 1 Surge, 3 Blank.
-            # White: 1 Crit, 1 Hit, 1 Surge, 5 Blank.
-
-            # My previous probability mapping was wrong. Let's fix.
-            # Red: 8 Sides. 1 Crit, 5 Hit, 1 Surge, 1 Blank.
-            # Black: 8 Sides. 1 Crit, 3 Hit, 1 Surge, 3 Blank.
-            # White: 8 Sides. 1 Crit, 1 Hit, 1 Surge, 5 Blank.
-
-            # Let's re-implement rolling logic inside.
             results = {"crit": 0, "hit": 0, "surge": 0, "blank": 0}
 
             def roll_legion_atk(color):
                 r = random.randint(1, 8)
                 if color == "red":
-                    # 1 Crit, 5 Hit (2-6), 1 Surge (7), 1 Blank (8)
+                    # 1 Crit, 6 Hit (2-7), 1 Surge (8) - Red has no blank!
                     if r == 1: return "crit"
-                    if 2 <= r <= 6: return "hit"
-                    if r == 7: return "surge"
-                    return "blank"
+                    if 2 <= r <= 7: return "hit"
+                    return "surge"
                 if color == "black":
                     # 1 Crit, 3 Hit (2-4), 1 Surge (5), 3 Blank (6-8)
                     if r == 1: return "crit"
@@ -495,8 +424,11 @@ class GameCompanion:
                     return "blank"
                 return "blank"
 
-            # Reset results
-            results = {"crit": 0, "hit": 0, "surge": 0, "blank": 0}
+            # Offensive Surge Conversion
+            # Check unit surge chart
+            surge_chart = unit.get("surge", {})
+            atk_surge = surge_chart.get("attack") # "hit", "crit" oder None
+            aims = var_aim.get()
             for color, count in pool.items():
                 for _ in range(count):
                     results[roll_legion_atk(color)] += 1
