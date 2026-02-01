@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import json
 import os
+import logging
 
 # =============================================================================
 # TEIL 1: DIE DATENBANK (IMPORT)
@@ -19,6 +20,8 @@ class LegionArmyBuilder:
         self.root = root
         self.root.title("SW Legion: Army Architect v4.0 (Save/Load)")
         self.root.geometry("1200x800")
+
+        logging.info("ArmeeBuilder initialized.")
 
         self.current_army_list = [] 
         self.current_faction = tk.StringVar()
@@ -168,8 +171,10 @@ class LegionArmyBuilder:
             try:
                 with open(file_path, 'w', encoding='utf-8') as f:
                     json.dump(save_data, f, indent=4, ensure_ascii=False)
+                logging.info(f"Army saved to {file_path}")
                 messagebox.showinfo("Erfolg", f"Armee erfolgreich gespeichert unter:\n{file_path}")
             except Exception as e:
+                logging.error(f"Failed to save army: {e}")
                 messagebox.showerror("Fehler", f"Konnte nicht speichern: {e}")
 
     def load_army(self):

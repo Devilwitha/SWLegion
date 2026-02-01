@@ -1,9 +1,11 @@
 import json
 import os
+import logging
 from LegionRules import LegionRules
 
 class LegionDatabase:
     def __init__(self):
+        logging.info("Initializing LegionDatabase...")
         self.rules = LegionRules
         self.units = {}
         self.upgrades = []
@@ -164,10 +166,12 @@ class LegionDatabase:
 
     def load_catalog(self):
         if not os.path.exists("catalog.json"):
+            logging.warning("catalog.json not found! Using internal legacy data only.")
             print("Warning: catalog.json not found!")
             return
 
         try:
+            logging.info("Loading catalog.json...")
             with open("catalog.json", "r", encoding="utf-8") as f:
                 data = json.load(f)
 
@@ -339,11 +343,13 @@ class LegionDatabase:
                 self.command_cards.append(cc)
 
         except Exception as e:
+            logging.error(f"Error loading catalog.json: {e}")
             print(f"Error loading catalog.json: {e}")
 
     def load_legacy(self):
         # Load legacy units
         try:
+            logging.info("Loading internal legacy units...")
             leg_units = json.loads(self.legacy_units_json)
             for faction, u_list in leg_units.items():
                 if faction not in self.units:
