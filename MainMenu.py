@@ -3,9 +3,12 @@ from tkinter import messagebox
 import os
 import sys
 import subprocess
+import logging
+import LegionUtils
 
 class MainMenu:
     def __init__(self, root):
+        LegionUtils.setup_logging()
         self.root = root
         self.root.title("Star Wars Legion: All-in-One Tool")
         self.root.geometry("400x400")
@@ -36,14 +39,17 @@ class MainMenu:
         try:
             # Prüfen ob Datei existiert
             if not os.path.exists(script_name):
+                 logging.error(f"Script missing: {script_name}")
                  messagebox.showerror("Fehler", f"Datei nicht gefunden: {script_name}")
                  return
 
             # subprocess.Popen erlaubt paralleles Ausführen ohne die GUI einzufrieren
+            logging.info(f"Launching submodule: {script_name}")
             cmd = [sys.executable, script_name]
             subprocess.Popen(cmd)
 
         except Exception as e:
+            logging.error(f"Failed to launch {script_name}: {e}")
             messagebox.showerror("Fehler", f"Konnte {script_name} nicht starten:\n{e}")
 
 if __name__ == "__main__":

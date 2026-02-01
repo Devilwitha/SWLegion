@@ -3,6 +3,7 @@ from tkinter import ttk, messagebox, filedialog
 import json
 import random
 import os
+import logging
 from LegionData import LegionDatabase
 from LegionRules import LegionRules
 
@@ -11,6 +12,8 @@ class GameCompanion:
         self.db = LegionDatabase()
         self.rules = LegionRules
         self.root = root
+
+        logging.info("GameCompanion initialized.")
         self.root.title("SW Legion: Game Companion & AI Simulator (v2.0 Rules)")
         self.root.geometry("1400x900")
 
@@ -43,6 +46,12 @@ class GameCompanion:
         top_frame.pack(fill="x")
 
         tk.Label(top_frame, text="Spiel-Begleiter", fg="white", bg="#333", font=("Segoe UI", 12, "bold")).pack(side=tk.LEFT, padx=10)
+
+        btn_mission = tk.Button(top_frame, text="LADE MISSION", bg="#4CAF50", fg="white", command=self.load_mission)
+        btn_mission.pack(side=tk.LEFT, padx=20)
+
+        self.btn_show_scenario = tk.Button(top_frame, text="SZENARIO INFO", bg="#FFC107", fg="black", command=self.show_scenario_popup, state=tk.DISABLED)
+        self.btn_show_scenario.pack(side=tk.LEFT, padx=5)
 
         btn_load_p = tk.Button(top_frame, text="Lade Spieler-Armee", bg="#2196F3", fg="white", command=lambda: self.load_army(True))
         btn_load_p.pack(side=tk.LEFT, padx=20)
@@ -97,7 +106,18 @@ class GameCompanion:
         return tree
 
     def load_army(self, is_player):
+        # Determine initial directory based on mission or base folder
         initial_dir = "Armeen"
+
+        # Try to match faction from mission
+        if self.mission_data:
+            target_faction = self.mission_data.get("blue_faction") if is_player else self.mission_data.get("red_faction")
+            if target_faction:
+                # Check if folder exists
+                path = os.path.join(initial_dir, target_faction)
+                if os.path.exists(path):
+                    initial_dir = path
+
         if not os.path.exists(initial_dir):
             os.makedirs(initial_dir)
 
@@ -105,6 +125,7 @@ class GameCompanion:
         if not file_path: return
 
         try:
+            logging.info(f"Loading army from {file_path}")
             with open(file_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
 
@@ -142,11 +163,14 @@ class GameCompanion:
             if is_player:
                 self.player_army = {"faction": faction, "units": enriched_units, "command_cards": command_cards}
                 self.update_tree(self.tree_player, self.player_army["units"])
+                logging.info(f"Player army loaded: {faction} ({len(enriched_units)} units)")
             else:
                 self.opponent_army = {"faction": faction, "units": enriched_units}
                 self.update_tree(self.tree_opponent, self.opponent_army["units"])
+                logging.info(f"Opponent army loaded: {faction} ({len(enriched_units)} units)")
 
         except Exception as e:
+            logging.error(f"Failed to load army: {e}")
             messagebox.showerror("Fehler", f"Fehler beim Laden: {e}")
 
     def find_unit_in_db(self, name, faction):
@@ -176,30 +200,89 @@ class GameCompanion:
         # Start Setup Phase
         self.start_setup_phase()
 
+    def load_mission(self):
+        initial_dir = "Missions"
+        if not os.path.exists(initial_dir): os.makedirs(initial_dir)
+
+        file_path = filedialog.askopenfilename(initialdir=initial_dir, title="Mission laden", filetypes=[("JSON", "*.json")])
+        if not file_path: return
+
+        try:
+            logging.info(f"Loading mission from {file_path}")
+            with open(file_path, 'r', encoding='utf-8') as f:
+                self.mission_data = json.load(f)
+
+            # Refresh Setup if in Setup Phase
+            if self.current_phase == "Setup":
+                for widget in self.frame_center.winfo_children(): widget.destroy()
+                self.start_setup_phase()
+
+            # Enable Scenario Button
+            if self.mission_data.get("scenario_text"):
+                self.btn_show_scenario.config(state=tk.NORMAL)
+
+            logging.info("Mission loaded successfully.")
+            messagebox.showinfo("Erfolg", "Mission geladen! Armee-Laden öffnet nun automatisch den richtigen Ordner.")
+
+        except Exception as e:
+            logging.error(f"Failed to load mission: {e}")
+            messagebox.showerror("Fehler", f"Konnte Mission nicht laden: {e}")
+
+    def show_scenario_popup(self):
+        if not self.mission_data or not self.mission_data.get("scenario_text"):
+            return
+
+        top = tk.Toplevel(self.root)
+        top.title("Szenario Details")
+        top.geometry("600x800")
+
+        txt = tk.Text(top, wrap="word", font=("Segoe UI", 11), padx=10, pady=10)
+        txt.pack(fill="both", expand=True)
+        txt.insert("1.0", self.mission_data.get("scenario_text", ""))
+        txt.config(state=tk.DISABLED)
+
     def start_setup_phase(self):
         self.current_phase = "Setup"
         tk.Label(self.frame_center, text="Phase: Spielvorbereitung", font=("Segoe UI", 20, "bold"), bg="#fafafa").pack(pady=20)
 
-        info_frame = tk.Frame(self.frame_center, bg="#fafafa")
-        info_frame.pack(pady=10)
+        # Mission Info
+        info_frame = tk.Frame(self.frame_center, bg="#e1f5fe", relief="ridge", bd=2, padx=10, pady=10)
+        info_frame.pack(pady=10, fill="x", padx=20)
+
+        if self.mission_data:
+            m = self.mission_data
+            txt = (f"MISSION: {m.get('mission_type', '-')}\n"
+                   f"AUFSTELLUNG: {m.get('deployment', '-')}\n"
+                   f"PUNKTE: {m.get('points', '-')}\n\n"
+                   f"SPIELER (BLAU): {m.get('blue_faction', '-')}\n"
+                   f"GEGNER (ROT): {m.get('red_faction', '-')}")
+            tk.Label(info_frame, text=txt, font=("Consolas", 10), justify="left", bg="#e1f5fe").pack()
+
+            if m.get("scenario_text"):
+                tk.Button(info_frame, text="Vollständiges Szenario lesen", command=self.show_scenario_popup, bg="#FFC107").pack(anchor="e", pady=5)
+        else:
+            tk.Label(info_frame, text="Keine Mission geladen.\nNutze 'LADE MISSION' oben.", font=("italic"), bg="#e1f5fe").pack()
+            tk.Button(info_frame, text="Mission laden", command=self.load_mission, bg="#2196F3", fg="white").pack(pady=5)
+
+        # Deck Status
+        deck_frame = tk.Frame(self.frame_center, bg="#fafafa")
+        deck_frame.pack(pady=10)
+
+        self.lbl_setup_status = tk.Label(deck_frame, text="Bitte wähle deine Kommandokarten (Hand von 7 Karten).", font=("Segoe UI", 12), bg="#fafafa")
+        self.lbl_setup_status.pack()
 
         pre_loaded_cards = self.player_army.get("command_cards", [])
 
         if pre_loaded_cards and len(pre_loaded_cards) == 7:
-            self.lbl_setup_status = tk.Label(info_frame, text="Kommandokarten aus Armeeliste geladen (7 Karten).", font=("Segoe UI", 12), fg="green", bg="#fafafa")
-            self.lbl_setup_status.pack()
+            self.lbl_setup_status.config(text="Kommandokarten aus Armeeliste geladen (7 Karten).", fg="green")
             self.player_hand = pre_loaded_cards
 
-            # Optional: Allow edit?
-            # For now, just proceed button
+            # Ready Button
             self.btn_finish_setup = tk.Button(self.frame_center, text="Spiel starten", command=self.finish_setup, bg="#4CAF50", fg="white", font=("Segoe UI", 14, "bold"))
             self.btn_finish_setup.pack(pady=20)
 
         else:
             # Legacy / Manual
-            self.lbl_setup_status = tk.Label(info_frame, text="Bitte wähle deine Kommandokarten (Hand von 7 Karten).", font=("Segoe UI", 12), bg="#fafafa")
-            self.lbl_setup_status.pack()
-
             btn_deck = tk.Button(self.frame_center, text="Kommandokarten wählen", command=self.open_deck_builder, bg="#2196F3", fg="white", font=("Segoe UI", 12))
             btn_deck.pack(pady=20)
 
@@ -576,21 +659,35 @@ class GameCompanion:
         tk.Label(self.frame_center, text=f"Pool: {pool_count} | Offene Befehle: P={face_up_p}, G={face_up_o}", bg="#eee", padx=10).pack(pady=5)
 
         # Actions
-        if self.active_turn_player == "Player":
+        # Check if Human (Player) OR AI is disabled (Human Opponent)
+        is_human_turn = (self.active_turn_player == "Player") or (not self.ai_enabled.get())
+
+        if is_human_turn:
+            turn_label = "Spieler Optionen" if self.active_turn_player == "Player" else "Gegner (Manuell) Optionen"
+
             # Player Options: Activate Face-Up OR Draw
             f_acts = tk.Frame(self.frame_center)
             f_acts.pack(pady=20)
 
+            tk.Label(f_acts, text=turn_label, font=("bold")).pack(pady=5)
+
             # Draw Button
             state_draw = tk.NORMAL if pool_count > 0 else tk.DISABLED
-            tk.Button(f_acts, text="Vom Stapel ziehen (Zufall)", command=self.player_draw_pool, bg="#FF9800", fg="white", font=("bold"), state=state_draw, width=25).pack(pady=5)
+
+            # Decide which pool to draw from based on active turn player
+            cmd_draw = self.player_draw_pool if self.active_turn_player == "Player" else self.opponent_draw_pool_manual
+
+            tk.Button(f_acts, text="Vom Stapel ziehen (Zufall)", command=cmd_draw, bg="#FF9800", fg="white", font=("bold"), state=state_draw, width=25).pack(pady=5)
 
             # Face Up Buttons
-            if face_up_p > 0:
+            current_army = self.player_army if self.active_turn_player == "Player" else self.opponent_army
+            face_up_count = face_up_p if self.active_turn_player == "Player" else face_up_o
+
+            if face_up_count > 0:
                 tk.Label(f_acts, text="--- ODER Wähle Einheit (Offener Befehl) ---").pack(pady=10)
-                for u in self.player_army["units"]:
+                for u in current_army["units"]:
                     if u.get("order_token") and not u.get("activated"):
-                        tk.Button(f_acts, text=f"Aktiviere: {u['name']}", command=lambda unit=u: self.activate_unit(unit, "Player")).pack(fill="x", pady=2)
+                        tk.Button(f_acts, text=f"Aktiviere: {u['name']}", command=lambda unit=u: self.activate_unit(unit, self.active_turn_player)).pack(fill="x", pady=2)
 
             # Pass Button (Optional, not strictly checking count diff here for simplicity)
             tk.Button(f_acts, text="Passen (Runde beenden / Nächster)", command=self.pass_turn, bg="#9E9E9E", fg="white").pack(pady=20)
@@ -601,17 +698,6 @@ class GameCompanion:
             self.root.after(1000, self.ai_take_turn)
 
     def player_draw_pool(self):
-        # Draw only Player tokens from pool?
-        # Standard rules: The pool contains tokens for BOTH if not using separate stacks.
-        # But usually players have their own pool of tokens.
-        # My Setup: self.order_pool contains mixed?
-        # self.order_pool was created with `side`.
-        # Correct rule: Each player has their own order pool.
-        # My `create_order_pool` mixed them?
-        # "Nachdem die Befehle erteilt wurden, bildet jeder Spieler seinen Befehlspool."
-        # Ah, separates Pools.
-        # Let's fix `draw` to only draw from Player's tokens in the list.
-
         # Filter pool for player
         player_tokens = [t for t in self.order_pool if t["side"] == "Player"]
         if not player_tokens:
@@ -623,6 +709,17 @@ class GameCompanion:
         self.order_pool.remove(token) # Remove from main list
 
         self.activate_unit(token["unit"], "Player")
+
+    def opponent_draw_pool_manual(self):
+        # Filter pool for opponent
+        opp_tokens = [t for t in self.order_pool if t["side"] == "Opponent"]
+        if not opp_tokens:
+            messagebox.showinfo("Info", "Keine Befehlsmarker im Pool.")
+            return
+
+        token = opp_tokens[0]
+        self.order_pool.remove(token)
+        self.activate_unit(token["unit"], "Opponent")
 
     def ai_take_turn(self):
         # AI Logic
@@ -644,9 +741,11 @@ class GameCompanion:
                 unit_to_activate = token["unit"]
 
         if unit_to_activate:
+            logging.info(f"AI activating unit: {unit_to_activate['name']}")
             self.activate_unit(unit_to_activate, "Opponent")
         else:
             # No units left? Pass.
+            logging.info("AI passing turn (no units left).")
             self.pass_turn()
 
     def pass_turn(self):
@@ -764,7 +863,8 @@ class GameCompanion:
         # Reduce actions immediately (except Attack which might cancel?)
         # For simplicity, reduce now.
 
-        msg = f"Aktion: {action_type}"
+        msg = f"Action: {action_type} for {self.active_unit['name']}"
+        logging.info(msg)
 
         if action_type == "Move":
             self.open_move_dialog()
@@ -782,9 +882,11 @@ class GameCompanion:
             self.active_unit["suppression"] = 0
             # Ready cards...
 
-        self.actions_remaining -= 1
-        self.update_actions_ui()
-        self.update_trees()
+        # Decrement is handled by dialog callback for Move/Attack
+        if action_type not in ["Move", "Attack"]:
+            self.actions_remaining -= 1
+            self.update_actions_ui()
+            self.update_trees()
 
     def end_activation(self):
         # End effects
@@ -799,23 +901,117 @@ class GameCompanion:
         self.pass_turn()
 
     def ai_perform_actions(self):
-        # AI Sim
-        if not self.is_panicked:
-            # 2 Actions
-            # 1. Move/Aim
-            # 2. Attack
-            count = self.actions_remaining
-            for _ in range(count):
-                # Simple logic
-                # If enemy close -> Attack
-                # Else -> Move
-                # For simulation, just "Attack" if possible (opens dialog?), wait, AI shouldn't open dialog.
-                # AI should sim attack.
-                # Since open_attack_dialog is GUI, I need a non-GUI attack sim or just skip.
-                # I will just log "AI performs Action".
-                pass
+        # Generate instructions for the human player
+        unit_name = self.active_unit["name"]
+        instructions = []
 
-        self.end_activation()
+        if self.is_panicked:
+            instructions.append("1. PANIK: Einheit flieht (Sammeln von Mut).")
+            instructions.append("2. Wirft alle Missionsziele ab.")
+        else:
+            # Simple AI Heuristic
+            is_melee = False
+            max_range = 0
+            if "weapons" in self.active_unit:
+                for w in self.active_unit["weapons"]:
+                    if w["range"][1] > max_range: max_range = w["range"][1]
+                    if w["range"][0] == 0: is_melee = True
+
+            # Actions based on role
+            if is_melee and max_range < 2:
+                instructions.append("1. BEWEGUNG: Auf nächsten Feind zu (Doppelt).")
+                instructions.append("   (Oder Angriff wenn in Reichweite).")
+                instructions.append("2. ANGRIFF: Falls möglich (Nahkampf).")
+            else:
+                instructions.append("1. ZIELEN (AIM): Erhalte Zielmarker.")
+                instructions.append(f"2. ANGRIFF: Auf Feind mit wenigster Deckung (Reichweite {max_range}).")
+
+        # If simple Heuristic says Attack, we ask user for targets
+        if not self.is_panicked and is_melee and max_range < 2:
+             # Melee Attack Query
+             self.ai_query_targets(self.active_unit, is_melee=True)
+        elif not self.is_panicked and max_range >= 2:
+             # Ranged Attack Query
+             self.ai_query_targets(self.active_unit, is_melee=False)
+        else:
+            # Move only or Panic
+            # Show Dialog
+            msg = f"Einheit: {unit_name}\n\n" + "\n".join(instructions) + "\n\nBitte führe diese Aktionen auf dem Tisch aus."
+            messagebox.showinfo("AI Zug Anweisung", msg)
+            self.end_activation()
+
+    def ai_query_targets(self, unit, is_melee):
+        top = tk.Toplevel(self.root)
+        top.title("AI Zielerfassung")
+        top.geometry("500x600")
+
+        tk.Label(top, text=f"AI Einheit: {unit['name']}", font=("bold", 12)).pack(pady=10)
+
+        # Show Weapons
+        tk.Label(top, text="Verfügbare Waffen:", font=("bold")).pack(anchor="w", padx=20)
+        weapons_info = []
+        best_weapon = None
+        max_dice = 0
+
+        if "weapons" in unit:
+            for w in unit["weapons"]:
+                # Filter melee/ranged based on intent
+                r_min, r_max = w["range"]
+                is_w_melee = (r_min == 0)
+
+                # Check if weapon fits the AI intent
+                if is_melee and not is_w_melee and r_min > 1: continue # Skip ranged weapons in melee intent? Or allow all?
+                # Actually, in melee you can only use Melee (and Versatile).
+                # Simplified: Just show all weapons and their ranges.
+
+                dice_count = sum(w["dice"].values())
+                if dice_count > max_dice:
+                    max_dice = dice_count
+                    best_weapon = w
+
+                weapons_info.append(f"• {w['name']} (Reichweite {r_min}-{r_max})")
+
+        for info in weapons_info:
+            tk.Label(top, text=info, padx=20).pack(anchor="w")
+
+        tk.Label(top, text="\nWelche Spieler-Einheiten sind in Reichweite & Sichtlinie?", font=("bold")).pack(pady=10)
+
+        # Player Units Checkboxes
+        target_vars = []
+        frame_list = tk.Frame(top)
+        frame_list.pack(fill="both", expand=True, padx=20)
+
+        for p_unit in self.player_army["units"]:
+            if p_unit["current_hp"] <= 0: continue
+
+            var = tk.BooleanVar()
+            c = tk.Checkbutton(frame_list, text=f"{p_unit['name']} (HP: {p_unit['current_hp']})", variable=var, anchor="w")
+            c.pack(fill="x")
+            target_vars.append({"unit": p_unit, "var": var})
+
+        def confirm():
+            valid_targets = [item["unit"] for item in target_vars if item["var"].get()]
+            top.destroy()
+            self.ai_decide_and_attack(valid_targets, best_weapon)
+
+        tk.Button(top, text="Bestätigen", command=confirm, bg="#2196F3", fg="white", font=("bold")).pack(pady=20)
+
+    def ai_decide_and_attack(self, valid_targets, best_weapon):
+        if not valid_targets:
+            messagebox.showinfo("AI Info", "Keine Ziele in Reichweite. AI führt Bewegung durch.")
+            self.end_activation()
+            return
+
+        # Logic: Pick Lowest HP, then Random
+        # Sort by current_hp
+        valid_targets.sort(key=lambda u: u["current_hp"])
+
+        # Pick first
+        chosen_target = valid_targets[0]
+
+        # Open Attack Dialog Pre-filled
+        # We need to modify open_attack_dialog to accept params
+        self.open_attack_dialog(pre_target=chosen_target["name"], pre_weapon=best_weapon["name"] if best_weapon else None)
 
     def open_move_dialog(self):
         top = tk.Toplevel(self.root)
@@ -832,6 +1028,13 @@ class GameCompanion:
         tk.Radiobutton(top, text="Offen", variable=var_terrain, value="Open").pack()
         tk.Radiobutton(top, text="Schwierig (-1 Speed)", variable=var_terrain, value="Difficult").pack()
 
+        # New: Cover Status
+        tk.Label(top, text="Endete die Bewegung in Deckung?").pack(pady=(10,0))
+        var_cover_status = tk.IntVar(value=unit.get("cover_status", 0))
+        tk.Radiobutton(top, text="Keine", variable=var_cover_status, value=0).pack()
+        tk.Radiobutton(top, text="Leicht", variable=var_cover_status, value=1).pack()
+        tk.Radiobutton(top, text="Schwer", variable=var_cover_status, value=2).pack()
+
         def confirm_move():
             final_speed = max_speed
             if var_terrain.get() == "Difficult":
@@ -840,6 +1043,9 @@ class GameCompanion:
                     pass
                 else:
                     final_speed = max(1, final_speed - 1)
+
+            # Save Cover Status
+            unit["cover_status"] = var_cover_status.get()
 
             # Apply Keywords
             info_txt = unit.get("info", "")
@@ -1025,8 +1231,14 @@ class GameCompanion:
         if self.opponent_army["units"]:
             self.update_tree(self.tree_opponent, self.opponent_army["units"])
 
-    def open_attack_dialog(self):
+    def open_attack_dialog(self, pre_target=None, pre_weapon=None):
         if not self.active_unit: return
+
+        # Callback for completion
+        def on_complete():
+            self.actions_remaining -= 1
+            self.update_actions_ui()
+            self.update_trees()
 
         # Dialog
         top = tk.Toplevel(self.root)
@@ -1044,7 +1256,12 @@ class GameCompanion:
         weapon_vars = []
         if "weapons" in unit:
             for w in unit["weapons"]:
-                var = tk.BooleanVar()
+                # Pre-select logic
+                default_val = False
+                if pre_weapon and w["name"] == pre_weapon:
+                    default_val = True
+
+                var = tk.BooleanVar(value=default_val)
                 chk = tk.Checkbutton(frame_weapons, text=f"{w['name']} (Reichweite {w['range'][0]}-{w['range'][1]})", variable=var)
                 chk.pack(anchor="w")
                 # Stats anzeigen
@@ -1066,11 +1283,17 @@ class GameCompanion:
         cb_target = ttk.Combobox(frame_target, values=target_names, state="readonly")
         cb_target.grid(row=0, column=1, sticky="ew")
 
+        if pre_target:
+            cb_target.set(pre_target)
+
         # Manuelle Overrides
         tk.Label(frame_target, text="Verteidigungswürfel:").grid(row=1, column=0, sticky="w", pady=5)
         var_def_die = tk.StringVar(value="White")
         cb_def = ttk.Combobox(frame_target, textvariable=var_def_die, values=["White", "Red"], state="readonly", width=10)
         cb_def.grid(row=1, column=1, sticky="w")
+
+        # Deckung / Token Variables
+        var_cover = tk.IntVar(value=0)
 
         # Auto-Fill Verteidigungswürfel bei Zielwahl
         def on_target_select(event):
@@ -1079,11 +1302,14 @@ class GameCompanion:
             if target_unit:
                 d_die = target_unit.get("defense", "White")
                 var_def_die.set(d_die)
+                # Load Default Cover from unit state
+                def_cover = target_unit.get("cover_status", 0)
+                var_cover.set(def_cover)
+
         cb_target.bind("<<ComboboxSelected>>", on_target_select)
 
-        # Deckung / Token
+        # Deckung / Token UI
         tk.Label(frame_target, text="Deckung (Cover):").grid(row=2, column=0, sticky="w")
-        var_cover = tk.IntVar(value=0)
         tk.Radiobutton(frame_target, text="Keine", variable=var_cover, value=0).grid(row=2, column=1, sticky="w")
         tk.Radiobutton(frame_target, text="Leicht (1)", variable=var_cover, value=1).grid(row=2, column=2, sticky="w")
         tk.Radiobutton(frame_target, text="Schwer (2)", variable=var_cover, value=2).grid(row=2, column=3, sticky="w")
@@ -1095,6 +1321,9 @@ class GameCompanion:
         tk.Label(frame_target, text="Zielen-Marker (Aim) [Angreifer]:").grid(row=4, column=0, sticky="w", pady=(10,0))
         var_aim = tk.IntVar(value=0)
         tk.Spinbox(frame_target, from_=0, to=10, textvariable=var_aim, width=5).grid(row=4, column=1, sticky="w", pady=(10,0))
+
+        # Buttons Control Variable
+        self.attack_rolled = False
 
         # 3. ERGEBNIS BEREICH
         frame_result = tk.LabelFrame(top, text="3. Ergebnis", padx=10, pady=10, bg="#e0f7fa")
@@ -1277,58 +1506,68 @@ class GameCompanion:
                 log_text += f"Dodge ({dodges}) verhindert {removed} Treffer.\n"
                 hits_remaining -= removed
 
+            # Disable Roll Button
+            self.attack_rolled = True
+            btn_roll.config(state=tk.DISABLED)
+
             if hits_remaining <= 0:
                 log_text += "ANGRIFF ABGEWEHRT (Keine Hits übrig)."
                 lbl_log.config(text=log_text, fg="blue")
-                return
+                # Even if 0 damage, we might want to apply "Attack Complete" state or Suppressive?
+                # Check Suppressive logic below.
+                # If 0 hits, standard suppression is 0, but keyword applies.
+                # Fallthrough to apply button logic
 
             # ROLL DEFENSE
-            def_die_type = var_def_die.get()
-            blocks = 0
-            def_surges = 0
-            def_blanks = 0
+            if hits_remaining > 0:
+                def_die_type = var_def_die.get()
+                blocks = 0
+                def_surges = 0
+                def_blanks = 0
 
-            for _ in range(hits_remaining):
-                r = random.randint(1, 6)
-                if def_die_type == "Red":
-                    if r <= 3: blocks += 1
-                    elif r == 4: def_surges += 1
-                    else: def_blanks += 1
-                else: # White
-                    if r == 1: blocks += 1
-                    elif r == 2: def_surges += 1
-                    else: def_blanks += 1
+                for _ in range(hits_remaining):
+                    r = random.randint(1, 6)
+                    if def_die_type == "Red":
+                        if r <= 3: blocks += 1
+                        elif r == 4: def_surges += 1
+                        else: def_blanks += 1
+                    else: # White
+                        if r == 1: blocks += 1
+                        elif r == 2: def_surges += 1
+                        else: def_blanks += 1
 
-            log_text += f"\nVerteidigungswurf ({hits_remaining} Würfel {def_die_type}):\nBlocks: {blocks}, Surges: {def_surges}, Blanks: {def_blanks}\n"
+                log_text += f"\nVerteidigungswurf ({hits_remaining} Würfel {def_die_type}):\nBlocks: {blocks}, Surges: {def_surges}, Blanks: {def_blanks}\n"
 
-            # DEFENSE SURGE
-            has_surge_block = False
-            if target_unit:
-                sc = target_unit.get("surge", {})
-                if sc.get("defense") == "block":
-                    has_surge_block = True
+                # DEFENSE SURGE
+                has_surge_block = False
+                if target_unit:
+                    sc = target_unit.get("surge", {})
+                    if sc.get("defense") == "block":
+                        has_surge_block = True
 
-            if has_surge_block:
-                blocks += def_surges
-                log_text += f"Surge -> Block ({def_surges})\n"
+                if has_surge_block:
+                    blocks += def_surges
+                    log_text += f"Surge -> Block ({def_surges})\n"
 
-            # PIERCE (Durchschlagen)
-            pierce_val = kw_map.get("Pierce", 0) + kw_map.get("Durchschlagen", 0)
+                # PIERCE (Durchschlagen)
+                pierce_val = kw_map.get("Pierce", 0) + kw_map.get("Durchschlagen", 0)
 
-            # Immune: Pierce check
-            immune_pierce = "Immune: Pierce" in target_info or "Immunität: Durchschlagen" in target_info
+                # Immune: Pierce check
+                immune_pierce = "Immune: Pierce" in target_info or "Immunität: Durchschlagen" in target_info
 
-            if pierce_val > 0 and blocks > 0:
-                if immune_pierce:
-                    log_text += "Ziel ist Immun gegen Durchschlagen.\n"
-                else:
-                    canceled = min(blocks, pierce_val)
-                    blocks -= canceled
-                    log_text += f"Pierce {pierce_val} bricht {canceled} Blocks!\n"
+                if pierce_val > 0 and blocks > 0:
+                    if immune_pierce:
+                        log_text += "Ziel ist Immun gegen Durchschlagen.\n"
+                    else:
+                        canceled = min(blocks, pierce_val)
+                        blocks -= canceled
+                        log_text += f"Pierce {pierce_val} bricht {canceled} Blocks!\n"
 
-            # FINAL WOUNDS
-            wounds = max(0, hits_remaining - blocks)
-            log_text += f"\nSCHADEN: {wounds}"
+                # FINAL WOUNDS
+                wounds = max(0, hits_remaining - blocks)
+                log_text += f"\nSCHADEN: {wounds}"
+            else:
+                wounds = 0
 
             # SUPPRESSION
             suppr_val = 0
@@ -1355,12 +1594,20 @@ class GameCompanion:
 
                     self.update_trees()
                     messagebox.showinfo("Update", f"{target_unit['name']}:\n-{wounds} HP\n+{suppr_val} Suppression")
+                    on_complete() # Decrement Action
                     top.destroy()
 
                 btn_apply = tk.Button(frame_result, text="ERGEBNIS ANWENDEN", bg="red", fg="white", command=apply_result)
                 btn_apply.pack(pady=5)
+            elif self.attack_rolled:
+                 # If rolled but no damage/suppression (e.g. all misses, no Suppressive), just close
+                 def finish_no_effect():
+                     on_complete()
+                     top.destroy()
+                 tk.Button(frame_result, text="ANGRIFF BEENDEN (Kein Effekt)", command=finish_no_effect, bg="#ccc").pack(pady=5)
 
-        tk.Button(top, text="WÜRFELN", command=roll_attack, font=("Segoe UI", 12, "bold"), bg="#2196F3", fg="white").pack(pady=10)
+        btn_roll = tk.Button(top, text="WÜRFELN", command=roll_attack, font=("Segoe UI", 12, "bold"), bg="#2196F3", fg="white")
+        btn_roll.pack(pady=10)
 
 
 if __name__ == "__main__":
