@@ -77,6 +77,10 @@ class LegionArmyBuilder:
         btn_config = tk.Button(left_frame, text="Einheit anpassen & hinzufügen >", bg="#2196F3", fg="white", font=("Segoe UI", 11, "bold"), command=self.open_config_window)
         btn_config.pack(fill="x", pady=10)
 
+        # 5. Kommandokarten Button
+        btn_cards = tk.Button(left_frame, text="Kommandokarten anzeigen", bg="#607D8B", fg="white", font=("Segoe UI", 10), command=self.show_command_cards)
+        btn_cards.pack(fill="x", pady=5)
+
         # --- RECHTE SEITE: ARMEE LISTE ---
         right_frame = tk.Frame(paned, bg="#f0f0f0", padx=10, pady=10)
         paned.add(right_frame)
@@ -372,6 +376,42 @@ class LegionArmyBuilder:
         self.root.clipboard_clear()
         self.root.clipboard_append(text)
         messagebox.showinfo("Kopiert", "Liste wurde in die Zwischenablage kopiert!")
+
+    def show_command_cards(self):
+        faction = self.current_faction.get()
+        if not faction:
+             messagebox.showwarning("Achtung", "Bitte wähle zuerst eine Fraktion.")
+             return
+
+        top = tk.Toplevel(self.root)
+        top.title(f"Kommandokarten: {faction}")
+        top.geometry("800x500")
+
+        cards = self.db.get_command_cards(faction)
+
+        cols = ("Name", "Pips", "Text")
+        tree = ttk.Treeview(top, columns=cols, show="headings")
+        tree.heading("Name", text="Name")
+        tree.heading("Pips", text="Pips")
+        tree.heading("Text", text="Effekt")
+
+        tree.column("Name", width=200)
+        tree.column("Pips", width=50, anchor="center")
+        tree.column("Text", width=500)
+
+        sb = ttk.Scrollbar(top, orient="vertical", command=tree.yview)
+        tree.configure(yscrollcommand=sb.set)
+
+        tree.pack(side="left", fill="both", expand=True, padx=(10,0), pady=10)
+        sb.pack(side="right", fill="y", padx=(0,10), pady=10)
+
+        # Sort by pips
+        cards.sort(key=lambda x: x.get("pips", 0))
+
+        for c in cards:
+            # Clean up newlines in text for display
+            text = c.get("text", "").replace("\n", " ")
+            tree.insert("", "end", values=(c.get("name"), c.get("pips"), text))
 
 # =============================================================================
 # START
