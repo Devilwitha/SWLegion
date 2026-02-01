@@ -110,6 +110,7 @@ class GameCompanion:
 
             faction = data.get("faction")
             army_list = data.get("army", [])
+            command_cards = data.get("command_cards", [])
 
             # Einheiten mit DB-Stats anreichern
             enriched_units = []
@@ -139,7 +140,7 @@ class GameCompanion:
 
             # Speichern
             if is_player:
-                self.player_army = {"faction": faction, "units": enriched_units}
+                self.player_army = {"faction": faction, "units": enriched_units, "command_cards": command_cards}
                 self.update_tree(self.tree_player, self.player_army["units"])
             else:
                 self.opponent_army = {"faction": faction, "units": enriched_units}
@@ -182,14 +183,28 @@ class GameCompanion:
         info_frame = tk.Frame(self.frame_center, bg="#fafafa")
         info_frame.pack(pady=10)
 
-        self.lbl_setup_status = tk.Label(info_frame, text="Bitte wähle deine Kommandokarten (Hand von 7 Karten).", font=("Segoe UI", 12), bg="#fafafa")
-        self.lbl_setup_status.pack()
+        pre_loaded_cards = self.player_army.get("command_cards", [])
 
-        btn_deck = tk.Button(self.frame_center, text="Kommandokarten wählen", command=self.open_deck_builder, bg="#2196F3", fg="white", font=("Segoe UI", 12))
-        btn_deck.pack(pady=20)
+        if pre_loaded_cards and len(pre_loaded_cards) == 7:
+            self.lbl_setup_status = tk.Label(info_frame, text="Kommandokarten aus Armeeliste geladen (7 Karten).", font=("Segoe UI", 12), fg="green", bg="#fafafa")
+            self.lbl_setup_status.pack()
+            self.player_hand = pre_loaded_cards
 
-        self.btn_finish_setup = tk.Button(self.frame_center, text="Setup abschließen & Spiel starten", command=self.finish_setup, bg="#4CAF50", fg="white", font=("Segoe UI", 14, "bold"), state=tk.DISABLED)
-        self.btn_finish_setup.pack(pady=20)
+            # Optional: Allow edit?
+            # For now, just proceed button
+            self.btn_finish_setup = tk.Button(self.frame_center, text="Spiel starten", command=self.finish_setup, bg="#4CAF50", fg="white", font=("Segoe UI", 14, "bold"))
+            self.btn_finish_setup.pack(pady=20)
+
+        else:
+            # Legacy / Manual
+            self.lbl_setup_status = tk.Label(info_frame, text="Bitte wähle deine Kommandokarten (Hand von 7 Karten).", font=("Segoe UI", 12), bg="#fafafa")
+            self.lbl_setup_status.pack()
+
+            btn_deck = tk.Button(self.frame_center, text="Kommandokarten wählen", command=self.open_deck_builder, bg="#2196F3", fg="white", font=("Segoe UI", 12))
+            btn_deck.pack(pady=20)
+
+            self.btn_finish_setup = tk.Button(self.frame_center, text="Setup abschließen & Spiel starten", command=self.finish_setup, bg="#4CAF50", fg="white", font=("Segoe UI", 14, "bold"), state=tk.DISABLED)
+            self.btn_finish_setup.pack(pady=20)
 
     def open_deck_builder(self):
         if not self.player_army["faction"]:

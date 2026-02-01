@@ -23,6 +23,7 @@ class LegionArmyBuilder:
         self.current_army_list = [] 
         self.current_faction = tk.StringVar()
         self.total_points = 0
+        self.current_command_cards = []
         
         # Basis-Ordner für Speicherstände erstellen
         self.base_dir = "Armeen"
@@ -78,8 +79,8 @@ class LegionArmyBuilder:
         btn_config.pack(fill="x", pady=10)
 
         # 5. Kommandokarten Button
-        btn_cards = tk.Button(left_frame, text="Kommandokarten anzeigen", bg="#607D8B", fg="white", font=("Segoe UI", 10), command=self.show_command_cards)
-        btn_cards.pack(fill="x", pady=5)
+        self.btn_cards = tk.Button(left_frame, text="Kommandokarten wählen (0/7)", bg="#607D8B", fg="white", font=("Segoe UI", 10), command=self.open_deck_builder)
+        self.btn_cards.pack(fill="x", pady=5)
 
         # --- RECHTE SEITE: ARMEE LISTE ---
         right_frame = tk.Frame(paned, bg="#f0f0f0", padx=10, pady=10)
@@ -160,7 +161,8 @@ class LegionArmyBuilder:
             save_data = {
                 "faction": faction,
                 "total_points": self.total_points,
-                "army": self.current_army_list
+                "army": self.current_army_list,
+                "command_cards": self.current_command_cards
             }
             
             try:
@@ -186,6 +188,7 @@ class LegionArmyBuilder:
                 # Daten Validieren
                 faction = data.get("faction")
                 army_list = data.get("army")
+                cards = data.get("command_cards", [])
 
                 if faction and army_list is not None:
                     # 1. Fraktion setzen
@@ -194,6 +197,8 @@ class LegionArmyBuilder:
                     self.update_unit_list()
                     # 3. Armee setzen
                     self.current_army_list = army_list
+                    self.current_command_cards = cards
+                    self.btn_cards.config(text=f"Kommandokarten wählen ({len(cards)}/7)")
                     # 4. GUI Rechts aktualisieren
                     self.refresh_army_view()
                     
@@ -377,41 +382,127 @@ class LegionArmyBuilder:
         self.root.clipboard_append(text)
         messagebox.showinfo("Kopiert", "Liste wurde in die Zwischenablage kopiert!")
 
-    def show_command_cards(self):
+    def open_deck_builder(self):
         faction = self.current_faction.get()
         if not faction:
-             messagebox.showwarning("Achtung", "Bitte wähle zuerst eine Fraktion.")
+             messagebox.showwarning("Fehler", "Bitte wähle zuerst eine Fraktion.")
              return
 
         top = tk.Toplevel(self.root)
-        top.title(f"Kommandokarten: {faction}")
-        top.geometry("800x500")
+        top.title("Kommandokarten Hand (7 Karten)")
+        top.geometry("1000x600")
 
-        cards = self.db.get_command_cards(faction)
+        # Layout: Available (Left) -> Buttons -> Selected (Right)
+        f_left = tk.LabelFrame(top, text="Verfügbare Karten")
+        f_left.pack(side="left", fill="both", expand=True, padx=5, pady=5)
 
-        cols = ("Name", "Pips", "Text")
-        tree = ttk.Treeview(top, columns=cols, show="headings")
-        tree.heading("Name", text="Name")
-        tree.heading("Pips", text="Pips")
-        tree.heading("Text", text="Effekt")
+        f_mid = tk.Frame(top)
+        f_mid.pack(side="left", fill="y", padx=5)
 
-        tree.column("Name", width=200)
-        tree.column("Pips", width=50, anchor="center")
-        tree.column("Text", width=500)
+        f_right = tk.LabelFrame(top, text=f"Gewählte Hand ({len(self.current_command_cards)}/7)")
+        f_right.pack(side="left", fill="both", expand=True, padx=5, pady=5)
 
-        sb = ttk.Scrollbar(top, orient="vertical", command=tree.yview)
-        tree.configure(yscrollcommand=sb.set)
+        # Lists
+        cols = ("Name", "Pips")
+        tv_avail = ttk.Treeview(f_left, columns=cols, show="headings")
+        tv_avail.heading("Name", text="Name")
+        tv_avail.heading("Pips", text="•")
+        tv_avail.column("Name", width=200)
+        tv_avail.column("Pips", width=30, anchor="center")
+        tv_avail.pack(fill="both", expand=True)
 
-        tree.pack(side="left", fill="both", expand=True, padx=(10,0), pady=10)
-        sb.pack(side="right", fill="y", padx=(0,10), pady=10)
+        tv_sel = ttk.Treeview(f_right, columns=cols, show="headings")
+        tv_sel.heading("Name", text="Name")
+        tv_sel.heading("Pips", text="•")
+        tv_sel.column("Name", width=200)
+        tv_sel.column("Pips", width=30, anchor="center")
+        tv_sel.pack(fill="both", expand=True)
+
+        # Load Cards
+        all_cards = self.db.get_command_cards(faction)
+        valid_pool = []
+        for c in all_cards:
+            valid_pool.append(c)
 
         # Sort by pips
-        cards.sort(key=lambda x: x.get("pips", 0))
+        valid_pool.sort(key=lambda x: x.get("pips", 0))
 
-        for c in cards:
-            # Clean up newlines in text for display
-            text = c.get("text", "").replace("\n", " ")
-            tree.insert("", "end", values=(c.get("name"), c.get("pips"), text))
+        for c in valid_pool:
+            tv_avail.insert("", "end", values=(c["name"], c["pips"]), tags=(str(c),))
+
+        temp_selected = list(self.current_command_cards)
+
+        def update_status():
+            count = len(temp_selected)
+            f_right.config(text=f"Gewählte Hand ({count}/7)")
+
+            # Repopulate selection list
+            for item in tv_sel.get_children(): tv_sel.delete(item)
+            for c in temp_selected:
+                tv_sel.insert("", "end", values=(c["name"], c["pips"]))
+
+            # Check constraints
+            pips = [c.get("pips", 0) for c in temp_selected]
+            c1 = pips.count(1)
+            c2 = pips.count(2)
+            c3 = pips.count(3)
+            c4 = pips.count(4)
+
+            valid = (c1 == 2 and c2 == 2 and c3 == 2 and c4 == 1)
+            status_txt = f"1•: {c1}/2 | 2•: {c2}/2 | 3•: {c3}/2 | 4•: {c4}/1"
+
+            if valid:
+                lbl_status.config(text=f"GÜLTIG: {status_txt}", fg="green")
+                btn_confirm.config(state=tk.NORMAL)
+            else:
+                lbl_status.config(text=f"UNGÜLTIG: {status_txt}", fg="red")
+                btn_confirm.config(state=tk.DISABLED)
+
+        def add_card():
+            sel = tv_avail.focus()
+            if not sel: return
+            item = tv_avail.item(sel)
+            name = item["values"][0]
+
+            # Find card object
+            card = next((c for c in valid_pool if c["name"] == name), None)
+            if not card: return
+
+            if len(temp_selected) >= 7: return
+            # Check unique name in list
+            if any(c["name"] == card["name"] for c in temp_selected): return
+
+            temp_selected.append(card)
+            update_status()
+
+        def remove_card():
+            sel = tv_sel.focus()
+            if not sel: return
+            item = tv_sel.item(sel)
+            name = item["values"][0]
+
+            # Remove by name
+            for i, c in enumerate(temp_selected):
+                if c["name"] == name:
+                    del temp_selected[i]
+                    break
+            update_status()
+
+        def confirm():
+            self.current_command_cards = temp_selected
+            self.btn_cards.config(text=f"Kommandokarten wählen ({len(temp_selected)}/7)")
+            top.destroy()
+
+        tk.Button(f_mid, text=">>", command=add_card).pack(pady=20)
+        tk.Button(f_mid, text="<<", command=remove_card).pack(pady=20)
+
+        lbl_status = tk.Label(top, text="...", font=("Segoe UI", 10, "bold"))
+        lbl_status.pack(pady=10)
+
+        btn_confirm = tk.Button(top, text="Speichern", command=confirm, state=tk.DISABLED, bg="#4CAF50", fg="white")
+        btn_confirm.pack(pady=10)
+
+        update_status()
 
 # =============================================================================
 # START
