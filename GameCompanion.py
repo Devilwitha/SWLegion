@@ -3,6 +3,7 @@ from tkinter import ttk, messagebox, filedialog
 import json
 import random
 import os
+import logging
 from LegionData import LegionDatabase
 from LegionRules import LegionRules
 
@@ -11,6 +12,8 @@ class GameCompanion:
         self.db = LegionDatabase()
         self.rules = LegionRules
         self.root = root
+
+        logging.info("GameCompanion initialized.")
         self.root.title("SW Legion: Game Companion & AI Simulator (v2.0 Rules)")
         self.root.geometry("1400x900")
 
@@ -122,6 +125,7 @@ class GameCompanion:
         if not file_path: return
 
         try:
+            logging.info(f"Loading army from {file_path}")
             with open(file_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
 
@@ -159,11 +163,14 @@ class GameCompanion:
             if is_player:
                 self.player_army = {"faction": faction, "units": enriched_units, "command_cards": command_cards}
                 self.update_tree(self.tree_player, self.player_army["units"])
+                logging.info(f"Player army loaded: {faction} ({len(enriched_units)} units)")
             else:
                 self.opponent_army = {"faction": faction, "units": enriched_units}
                 self.update_tree(self.tree_opponent, self.opponent_army["units"])
+                logging.info(f"Opponent army loaded: {faction} ({len(enriched_units)} units)")
 
         except Exception as e:
+            logging.error(f"Failed to load army: {e}")
             messagebox.showerror("Fehler", f"Fehler beim Laden: {e}")
 
     def find_unit_in_db(self, name, faction):
@@ -201,6 +208,7 @@ class GameCompanion:
         if not file_path: return
 
         try:
+            logging.info(f"Loading mission from {file_path}")
             with open(file_path, 'r', encoding='utf-8') as f:
                 self.mission_data = json.load(f)
 
@@ -213,9 +221,11 @@ class GameCompanion:
             if self.mission_data.get("scenario_text"):
                 self.btn_show_scenario.config(state=tk.NORMAL)
 
+            logging.info("Mission loaded successfully.")
             messagebox.showinfo("Erfolg", "Mission geladen! Armee-Laden öffnet nun automatisch den richtigen Ordner.")
 
         except Exception as e:
+            logging.error(f"Failed to load mission: {e}")
             messagebox.showerror("Fehler", f"Konnte Mission nicht laden: {e}")
 
     def show_scenario_popup(self):
@@ -731,9 +741,11 @@ class GameCompanion:
                 unit_to_activate = token["unit"]
 
         if unit_to_activate:
+            logging.info(f"AI activating unit: {unit_to_activate['name']}")
             self.activate_unit(unit_to_activate, "Opponent")
         else:
             # No units left? Pass.
+            logging.info("AI passing turn (no units left).")
             self.pass_turn()
 
     def pass_turn(self):
@@ -851,7 +863,8 @@ class GameCompanion:
         # Reduce actions immediately (except Attack which might cancel?)
         # For simplicity, reduce now.
 
-        msg = f"Aktion: {action_type}"
+        msg = f"Action: {action_type} for {self.active_unit['name']}"
+        logging.info(msg)
 
         if action_type == "Move":
             self.open_move_dialog()
