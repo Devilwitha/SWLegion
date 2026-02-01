@@ -3,12 +3,20 @@ from tkinter import messagebox, filedialog, ttk
 import json
 import random
 import os
+try:
+    import requests
+    REQUESTS_AVAILABLE = True
+except ImportError:
+    REQUESTS_AVAILABLE = False
 
 class LegionMissionGenerator:
     def __init__(self, root):
         self.root = root
         self.root.title("SW Legion: Mission & Map Generator")
         self.root.geometry("1400x900")
+
+        self.api_key = self.load_api_key()
+        self.current_scenario_text = ""
         
         # --- Daten ---
         self.fraktionen = [
@@ -88,14 +96,14 @@ class LegionMissionGenerator:
         # 4. BUTTON
         btn_gen = tk.Button(
             frame_settings,
-            text="PROMPT ERSTELLEN & KOPIEREN", 
-            command=self.generate_prompt,
+            text="SZENARIO GENERIEREN (AI)",
+            command=self.generate_scenario_with_gemini,
             bg="#2196F3", fg="white", font=("Arial", 12, "bold"), height=2
         )
         btn_gen.pack(pady=20, fill="x")
 
         # 5. VORSCHAU
-        lbl_output = tk.Label(frame_settings, text="Vorschau:", font=("Arial", 9))
+        lbl_output = tk.Label(frame_settings, text="Szenario-Text:", font=("Arial", 9))
         lbl_output.pack(anchor="w")
 
         self.txt_output = tk.Text(frame_settings, height=8, font=("Consolas", 8), wrap="word")
@@ -205,6 +213,16 @@ class LegionMissionGenerator:
 
         self.update_map()
 
+    def load_api_key(self):
+        # Try to load from file
+        try:
+            if os.path.exists("gemini_key.txt"):
+                with open("gemini_key.txt", "r") as f:
+                    return f.read().strip()
+        except:
+            pass
+        return ""
+
     def save_mission(self):
         # Gather data
         data = {
@@ -214,7 +232,8 @@ class LegionMissionGenerator:
             "red_faction": self.combo_red.get(),
             "points": self.entry_punkte.get(),
             "terrain": [k for k,v in self.var_gelaende.items() if v.get()],
-            "prompt_text": self.txt_output.get("1.0", tk.END)
+            "prompt_text": self.txt_output.get("1.0", tk.END),
+            "scenario_text": self.current_scenario_text
         }
 
         if not data["blue_faction"] or not data["red_faction"]:
@@ -484,16 +503,13 @@ class LegionMissionGenerator:
         deploy = self.combo_deploy.get()
         mission = self.combo_mission.get()
 
-        # Validierung
         if not fraktionen_gewaehlt:
-            messagebox.showwarning("Fehler", "Wähle mindestens eine Fraktion!")
-            return
+            # Fallback if manual call
+            return "Bitte Fraktionen wählen."
         
-        # Textbausteine
         str_fraktionen = ", ".join(fraktionen_gewaehlt)
         str_terrain = ", ".join(terrain_gewaehlt) if terrain_gewaehlt else "Zufällig / Keine Präferenz"
 
-        # Prompt zusammenbauen
         prompt = (
             f"Erstelle eine detaillierte und balancierte Mission für Star Wars: Legion.\n\n"
             f"**Rahmenbedingungen:**\n"
@@ -510,15 +526,49 @@ class LegionMissionGenerator:
             f"5. **Siegbedingungen:** Nenne die Bedingungen für den Sieg.\n\n"
             f"Antworte auf Deutsch und formatiere die Antwort übersichtlich."
         )
+        return prompt
 
-        # Ausgabe
+    def generate_scenario_with_gemini(self):
+        if not REQUESTS_AVAILABLE:
+            messagebox.showerror("Fehler", "Das Modul 'requests' fehlt. AI-Generierung nicht möglich.")
+            return
+
+        if not self.api_key:
+            messagebox.showerror("Fehler", "Kein API Key gefunden (gemini_key.txt fehlt).")
+            return
+
+        prompt = self.generate_prompt()
+        if "Bitte Fraktionen wählen" in prompt:
+            messagebox.showwarning("Fehler", "Wähle mindestens eine Fraktion!")
+            return
+
         self.txt_output.delete("1.0", tk.END)
-        self.txt_output.insert(tk.END, prompt)
-        
-        self.root.clipboard_clear()
-        self.root.clipboard_append(prompt)
-        
-        messagebox.showinfo("Kopiert", "Der Prompt wurde in die Zwischenablage kopiert!")
+        self.txt_output.insert(tk.END, "Generiere Szenario mit Gemini AI... Bitte warten...\n")
+        self.root.update()
+
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={self.api_key}"
+        headers = {'Content-Type': 'application/json'}
+        data = {
+            "contents": [{
+                "parts": [{"text": prompt}]
+            }]
+        }
+
+        try:
+            response = requests.post(url, headers=headers, json=data)
+            if response.status_code == 200:
+                result = response.json()
+                try:
+                    text_content = result['candidates'][0]['content']['parts'][0]['text']
+                    self.current_scenario_text = text_content
+                    self.txt_output.delete("1.0", tk.END)
+                    self.txt_output.insert(tk.END, text_content)
+                except KeyError:
+                    self.txt_output.insert(tk.END, f"\nFehler beim Parsen der Antwort: {result}")
+            else:
+                self.txt_output.insert(tk.END, f"\nAPI Fehler ({response.status_code}): {response.text}")
+        except Exception as e:
+            self.txt_output.insert(tk.END, f"\nVerbindungsfehler: {e}")
 
 if __name__ == "__main__":
     root = tk.Tk()

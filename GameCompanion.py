@@ -47,6 +47,9 @@ class GameCompanion:
         btn_mission = tk.Button(top_frame, text="LADE MISSION", bg="#4CAF50", fg="white", command=self.load_mission)
         btn_mission.pack(side=tk.LEFT, padx=20)
 
+        self.btn_show_scenario = tk.Button(top_frame, text="SZENARIO INFO", bg="#FFC107", fg="black", command=self.show_scenario_popup, state=tk.DISABLED)
+        self.btn_show_scenario.pack(side=tk.LEFT, padx=5)
+
         btn_load_p = tk.Button(top_frame, text="Lade Spieler-Armee", bg="#2196F3", fg="white", command=lambda: self.load_army(True))
         btn_load_p.pack(side=tk.LEFT, padx=20)
 
@@ -206,10 +209,27 @@ class GameCompanion:
                 for widget in self.frame_center.winfo_children(): widget.destroy()
                 self.start_setup_phase()
 
+            # Enable Scenario Button
+            if self.mission_data.get("scenario_text"):
+                self.btn_show_scenario.config(state=tk.NORMAL)
+
             messagebox.showinfo("Erfolg", "Mission geladen! Armee-Laden öffnet nun automatisch den richtigen Ordner.")
 
         except Exception as e:
             messagebox.showerror("Fehler", f"Konnte Mission nicht laden: {e}")
+
+    def show_scenario_popup(self):
+        if not self.mission_data or not self.mission_data.get("scenario_text"):
+            return
+
+        top = tk.Toplevel(self.root)
+        top.title("Szenario Details")
+        top.geometry("600x800")
+
+        txt = tk.Text(top, wrap="word", font=("Segoe UI", 11), padx=10, pady=10)
+        txt.pack(fill="both", expand=True)
+        txt.insert("1.0", self.mission_data.get("scenario_text", ""))
+        txt.config(state=tk.DISABLED)
 
     def start_setup_phase(self):
         self.current_phase = "Setup"
@@ -227,6 +247,9 @@ class GameCompanion:
                    f"SPIELER (BLAU): {m.get('blue_faction', '-')}\n"
                    f"GEGNER (ROT): {m.get('red_faction', '-')}")
             tk.Label(info_frame, text=txt, font=("Consolas", 10), justify="left", bg="#e1f5fe").pack()
+
+            if m.get("scenario_text"):
+                tk.Button(info_frame, text="Vollständiges Szenario lesen", command=self.show_scenario_popup, bg="#FFC107").pack(anchor="e", pady=5)
         else:
             tk.Label(info_frame, text="Keine Mission geladen.\nNutze 'LADE MISSION' oben.", font=("italic"), bg="#e1f5fe").pack()
             tk.Button(info_frame, text="Mission laden", command=self.load_mission, bg="#2196F3", fg="white").pack(pady=5)
@@ -846,9 +869,11 @@ class GameCompanion:
             self.active_unit["suppression"] = 0
             # Ready cards...
 
-        self.actions_remaining -= 1
-        self.update_actions_ui()
-        self.update_trees()
+        # Decrement is handled by dialog callback for Move/Attack
+        if action_type not in ["Move", "Attack"]:
+            self.actions_remaining -= 1
+            self.update_actions_ui()
+            self.update_trees()
 
     def end_activation(self):
         # End effects
@@ -1195,6 +1220,12 @@ class GameCompanion:
 
     def open_attack_dialog(self, pre_target=None, pre_weapon=None):
         if not self.active_unit: return
+
+        # Callback for completion
+        def on_complete():
+            self.actions_remaining -= 1
+            self.update_actions_ui()
+            self.update_trees()
 
         # Dialog
         top = tk.Toplevel(self.root)
@@ -1550,13 +1581,17 @@ class GameCompanion:
 
                     self.update_trees()
                     messagebox.showinfo("Update", f"{target_unit['name']}:\n-{wounds} HP\n+{suppr_val} Suppression")
+                    on_complete() # Decrement Action
                     top.destroy()
 
                 btn_apply = tk.Button(frame_result, text="ERGEBNIS ANWENDEN", bg="red", fg="white", command=apply_result)
                 btn_apply.pack(pady=5)
             elif self.attack_rolled:
                  # If rolled but no damage/suppression (e.g. all misses, no Suppressive), just close
-                 tk.Button(frame_result, text="ANGRIFF BEENDEN (Kein Effekt)", command=top.destroy, bg="#ccc").pack(pady=5)
+                 def finish_no_effect():
+                     on_complete()
+                     top.destroy()
+                 tk.Button(frame_result, text="ANGRIFF BEENDEN (Kein Effekt)", command=finish_no_effect, bg="#ccc").pack(pady=5)
 
         btn_roll = tk.Button(top, text="WÜRFELN", command=roll_attack, font=("Segoe UI", 12, "bold"), bg="#2196F3", fg="white")
         btn_roll.pack(pady=10)
