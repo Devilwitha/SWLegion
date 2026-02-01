@@ -838,11 +838,92 @@ class GameCompanion:
                 instructions.append("1. ZIELEN (AIM): Erhalte Zielmarker.")
                 instructions.append(f"2. ANGRIFF: Auf Feind mit wenigster Deckung (Reichweite {max_range}).")
 
-        # Show Dialog
-        msg = f"Einheit: {unit_name}\n\n" + "\n".join(instructions) + "\n\nBitte führe diese Aktionen auf dem Tisch aus."
-        messagebox.showinfo("AI Zug Anweisung", msg)
+        # If simple Heuristic says Attack, we ask user for targets
+        if not self.is_panicked and is_melee and max_range < 2:
+             # Melee Attack Query
+             self.ai_query_targets(self.active_unit, is_melee=True)
+        elif not self.is_panicked and max_range >= 2:
+             # Ranged Attack Query
+             self.ai_query_targets(self.active_unit, is_melee=False)
+        else:
+            # Move only or Panic
+            # Show Dialog
+            msg = f"Einheit: {unit_name}\n\n" + "\n".join(instructions) + "\n\nBitte führe diese Aktionen auf dem Tisch aus."
+            messagebox.showinfo("AI Zug Anweisung", msg)
+            self.end_activation()
 
-        self.end_activation()
+    def ai_query_targets(self, unit, is_melee):
+        top = tk.Toplevel(self.root)
+        top.title("AI Zielerfassung")
+        top.geometry("500x600")
+
+        tk.Label(top, text=f"AI Einheit: {unit['name']}", font=("bold", 12)).pack(pady=10)
+
+        # Show Weapons
+        tk.Label(top, text="Verfügbare Waffen:", font=("bold")).pack(anchor="w", padx=20)
+        weapons_info = []
+        best_weapon = None
+        max_dice = 0
+
+        if "weapons" in unit:
+            for w in unit["weapons"]:
+                # Filter melee/ranged based on intent
+                r_min, r_max = w["range"]
+                is_w_melee = (r_min == 0)
+
+                # Check if weapon fits the AI intent
+                if is_melee and not is_w_melee and r_min > 1: continue # Skip ranged weapons in melee intent? Or allow all?
+                # Actually, in melee you can only use Melee (and Versatile).
+                # Simplified: Just show all weapons and their ranges.
+
+                dice_count = sum(w["dice"].values())
+                if dice_count > max_dice:
+                    max_dice = dice_count
+                    best_weapon = w
+
+                weapons_info.append(f"• {w['name']} (Reichweite {r_min}-{r_max})")
+
+        for info in weapons_info:
+            tk.Label(top, text=info, padx=20).pack(anchor="w")
+
+        tk.Label(top, text="\nWelche Spieler-Einheiten sind in Reichweite & Sichtlinie?", font=("bold")).pack(pady=10)
+
+        # Player Units Checkboxes
+        target_vars = []
+        frame_list = tk.Frame(top)
+        frame_list.pack(fill="both", expand=True, padx=20)
+
+        for p_unit in self.player_army["units"]:
+            if p_unit["current_hp"] <= 0: continue
+
+            var = tk.BooleanVar()
+            c = tk.Checkbutton(frame_list, text=f"{p_unit['name']} (HP: {p_unit['current_hp']})", variable=var, anchor="w")
+            c.pack(fill="x")
+            target_vars.append({"unit": p_unit, "var": var})
+
+        def confirm():
+            valid_targets = [item["unit"] for item in target_vars if item["var"].get()]
+            top.destroy()
+            self.ai_decide_and_attack(valid_targets, best_weapon)
+
+        tk.Button(top, text="Bestätigen", command=confirm, bg="#2196F3", fg="white", font=("bold")).pack(pady=20)
+
+    def ai_decide_and_attack(self, valid_targets, best_weapon):
+        if not valid_targets:
+            messagebox.showinfo("AI Info", "Keine Ziele in Reichweite. AI führt Bewegung durch.")
+            self.end_activation()
+            return
+
+        # Logic: Pick Lowest HP, then Random
+        # Sort by current_hp
+        valid_targets.sort(key=lambda u: u["current_hp"])
+
+        # Pick first
+        chosen_target = valid_targets[0]
+
+        # Open Attack Dialog Pre-filled
+        # We need to modify open_attack_dialog to accept params
+        self.open_attack_dialog(pre_target=chosen_target["name"], pre_weapon=best_weapon["name"] if best_weapon else None)
 
     def open_move_dialog(self):
         top = tk.Toplevel(self.root)
@@ -1062,7 +1143,7 @@ class GameCompanion:
         if self.opponent_army["units"]:
             self.update_tree(self.tree_opponent, self.opponent_army["units"])
 
-    def open_attack_dialog(self):
+    def open_attack_dialog(self, pre_target=None, pre_weapon=None):
         if not self.active_unit: return
 
         # Dialog
@@ -1081,7 +1162,12 @@ class GameCompanion:
         weapon_vars = []
         if "weapons" in unit:
             for w in unit["weapons"]:
-                var = tk.BooleanVar()
+                # Pre-select logic
+                default_val = False
+                if pre_weapon and w["name"] == pre_weapon:
+                    default_val = True
+
+                var = tk.BooleanVar(value=default_val)
                 chk = tk.Checkbutton(frame_weapons, text=f"{w['name']} (Reichweite {w['range'][0]}-{w['range'][1]})", variable=var)
                 chk.pack(anchor="w")
                 # Stats anzeigen
@@ -1102,6 +1188,9 @@ class GameCompanion:
         tk.Label(frame_target, text="Ziel wählen:").grid(row=0, column=0, sticky="w")
         cb_target = ttk.Combobox(frame_target, values=target_names, state="readonly")
         cb_target.grid(row=0, column=1, sticky="ew")
+
+        if pre_target:
+            cb_target.set(pre_target)
 
         # Manuelle Overrides
         tk.Label(frame_target, text="Verteidigungswürfel:").grid(row=1, column=0, sticky="w", pady=5)
