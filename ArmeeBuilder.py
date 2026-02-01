@@ -94,16 +94,18 @@ class LegionArmyBuilder:
         btn_save.pack(side=tk.RIGHT, padx=5)
 
         # Armee Liste (Treeview)
-        army_cols = ("ID", "Einheit", "Upgrades", "Punkte")
+        army_cols = ("ID", "Einheit", "Minis", "Upgrades", "Punkte")
         self.tree_army = ttk.Treeview(right_frame, columns=army_cols, show="headings")
         self.tree_army.heading("ID", text="#")
         self.tree_army.heading("Einheit", text="Einheit")
+        self.tree_army.heading("Minis", text="Fig.")
         self.tree_army.heading("Upgrades", text="Ausrüstung")
         self.tree_army.heading("Punkte", text="Kosten")
         
         self.tree_army.column("ID", width=30, anchor="center")
         self.tree_army.column("Einheit", width=180)
-        self.tree_army.column("Upgrades", width=300)
+        self.tree_army.column("Minis", width=40, anchor="center")
+        self.tree_army.column("Upgrades", width=260)
         self.tree_army.column("Punkte", width=60, anchor="center")
         self.tree_army.pack(fill="both", expand=True, pady=5)
 
@@ -296,6 +298,9 @@ class LegionArmyBuilder:
         def add_confirmed():
             total_cost = unit_data["points"]
             chosen_upgrades_list = []
+            # NEU: Extra Minis berechnen
+            base_minis = unit_data.get("minis", 1)
+            extra_minis = 0
             
             for sel in selectors:
                 val = sel["var"].get()
@@ -303,13 +308,18 @@ class LegionArmyBuilder:
                     upg_data = sel["map"][val]
                     total_cost += upg_data["points"]
                     chosen_upgrades_list.append(val) # Speichert "Name (Punkte)"
+                    if upg_data.get("adds_mini"):
+                        extra_minis += 1
             
+            final_minis = base_minis + extra_minis
+
             # Zur Armee hinzufügen
             self.current_army_list.append({
                 "name": unit_name,
                 "upgrades": chosen_upgrades_list,
                 "points": total_cost,
-                "base_points": unit_data["points"]
+                "base_points": unit_data["points"],
+                "minis": final_minis
             })
             self.refresh_army_view()
             top.destroy()
@@ -325,7 +335,9 @@ class LegionArmyBuilder:
         
         for idx, unit in enumerate(self.current_army_list):
             upg_str = ", ".join(unit["upgrades"]) if unit["upgrades"] else "-"
-            self.tree_army.insert("", "end", values=(idx+1, unit["name"], upg_str, unit["points"]))
+            # Minis abrufen oder defaulten falls altes Savefile
+            minis = unit.get("minis", "?")
+            self.tree_army.insert("", "end", values=(idx+1, unit["name"], minis, upg_str, unit["points"]))
             self.total_points += unit["points"]
             
         self.lbl_total.config(text=f"Gesamtpunkte: {self.total_points} / 800")

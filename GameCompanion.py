@@ -69,12 +69,14 @@ class GameCompanion:
         self.tree_opponent = self.create_unit_tree(self.frame_opponent)
 
     def create_unit_tree(self, parent):
-        cols = ("Name", "HP", "Status")
+        cols = ("Name", "Minis", "HP", "Status")
         tree = ttk.Treeview(parent, columns=cols, show="headings")
         tree.heading("Name", text="Einheit")
+        tree.heading("Minis", text="Fig.")
         tree.heading("HP", text="HP")
         tree.heading("Status", text="Status")
-        tree.column("Name", width=150)
+        tree.column("Name", width=140)
+        tree.column("Minis", width=30, anchor="center")
         tree.column("HP", width=40, anchor="center")
         tree.column("Status", width=60)
         tree.pack(fill="both", expand=True)
@@ -107,6 +109,16 @@ class GameCompanion:
                     full_unit["current_hp"] = full_unit["hp"]
                     full_unit["activated"] = False
                     full_unit["suppression"] = 0
+
+                    # Minis berechnen falls nicht im Save (Kompatibilität)
+                    if "minis" not in full_unit:
+                        base = db_unit.get("minis", 1)
+                        extra = 0
+                        # Check upgrades in 'item' (das gespeicherte Objekt hat 'upgrades' Liste von Strings)
+                        # Leider haben wir hier nur Strings "Name (Punkte)". Wir müssten matchen.
+                        # Vereinfachung: Wir nehmen base wenn nicht gespeichert.
+                        full_unit["minis"] = base
+
                     enriched_units.append(full_unit)
                 else:
                     print(f"Warnung: Einheit {item['name']} nicht in DB gefunden.")
@@ -134,7 +146,8 @@ class GameCompanion:
             tree.delete(item)
         for u in units:
             status = "Bereit" if not u["activated"] else "Aktiviert"
-            tree.insert("", "end", values=(u["name"], f"{u['current_hp']}/{u['hp']}", status))
+            minis = u.get("minis", 1)
+            tree.insert("", "end", values=(u["name"], minis, f"{u['current_hp']}/{u['hp']}", status))
 
     def init_game(self):
         if not self.player_army["units"] and not self.opponent_army["units"]:
@@ -401,86 +414,15 @@ class GameCompanion:
                     keywords.extend(wd["keywords"])
 
             # WÜRFELN (Angriff)
-            results = {"crit": 0, "hit": 0, "blank": 0}
-            # Simuliere Würfe
-            # Red: 1/8 Crit, 5/8 Hit, 2/8 Blank -> Wait, Red is best.
-            # Real Legion Dice:
-            # Red: 1 Crit, 6 Hit, 1 Blank (Total 8) -> Wait no.
-            # Correct Stats:
-            # Red (Attack): 1 Crit, 5 Hit, 2 Blank.
-            # Black (Attack): 1 Crit, 3 Hit, 4 Blank.
-            # White (Attack): 1 Crit, 1 Hit, 6 Blank.
-
-            # Helper for rolling
-            def roll_die(color):
-                r = random.randint(1, 8)
-                if color == "red":
-                    return "crit" if r == 8 else ("hit" if r >= 3 else "blank")
-                elif color == "black":
-                    return "crit" if r == 8 else ("hit" if r >= 5 else "blank")
-                elif color == "white":
-                    return "crit" if r == 8 else ("hit" if r == 7 else "blank")
-                return "blank"
-
-            for color, count in pool.items():
-                for _ in range(count):
-                    res = roll_die(color)
-                    results[res] += 1
-
-            log_text = f"Würfelpool: {pool}\n"
-            log_text += f"Wurf: {results}\n"
-
-            # MODS: Aim (Reroll Blanks -> simple assumption: reroll 2 dice per aim)
-            aims = var_aim.get()
-            if aims > 0 and results["blank"] > 0:
-                rerolls = min(results["blank"], aims * 2) # Standard: 2 Würfel pro Aim
-                log_text += f"Zielen ({aims}): {rerolls} Blanks neu gewürfelt...\n"
-                results["blank"] -= rerolls
-                # Welche Farbe rerollen? Einfachheitshalber nehmen wir den Durchschnitt oder die beste Farbe die im Pool war.
-                # Simplification: Wir werfen neu basierend auf der Verteilung des Pools
-                total_dice = sum(pool.values())
-                if total_dice > 0:
-                    for _ in range(rerolls):
-                        # Ziehe zufällige Farbe aus dem ursprünglichen Pool (gewichtet)
-                        choices = []
-                        for c, n in pool.items(): choices.extend([c]*n)
-                        if choices:
-                            res = roll_die(random.choice(choices))
-                            results[res] += 1
-
-                log_text += f"Nach Reroll: {results}\n"
-
-            # Offensive Surge Conversion
-            # Check unit surge chart
-            surge_chart = unit.get("surge", {})
-            atk_surge = surge_chart.get("attack") # "hit", "crit" oder None
-            # Critical Keyword?
-            # (Vereinfachung: Wir nehmen an Surge -> Hit wenn nicht anders definiert, viele Einheiten haben das nicht standardmäßig)
-
-            hits = results["hit"]
-            crits = results["crit"]
-            surges_rolled = 0 # Legion Attack dice don't have "surge" symbol result separate from Hit/Crit?
-            # WAIT. Legion Attack Dice Symbols:
-            # Red: 1 Crit, 5 Hit, 1 Surge, 1 Blank. (8 sides)
-            # Black: 1 Crit, 3 Hit, 1 Surge, 3 Blank.
-            # White: 1 Crit, 1 Hit, 1 Surge, 5 Blank.
-
-            # My previous probability mapping was wrong. Let's fix.
-            # Red: 8 Sides. 1 Crit, 5 Hit, 1 Surge, 1 Blank.
-            # Black: 8 Sides. 1 Crit, 3 Hit, 1 Surge, 3 Blank.
-            # White: 8 Sides. 1 Crit, 1 Hit, 1 Surge, 5 Blank.
-
-            # Let's re-implement rolling logic inside.
             results = {"crit": 0, "hit": 0, "surge": 0, "blank": 0}
 
             def roll_legion_atk(color):
                 r = random.randint(1, 8)
                 if color == "red":
-                    # 1 Crit, 5 Hit (2-6), 1 Surge (7), 1 Blank (8)
+                    # 1 Crit, 6 Hit (2-7), 1 Surge (8) - Red has no blank!
                     if r == 1: return "crit"
-                    if 2 <= r <= 6: return "hit"
-                    if r == 7: return "surge"
-                    return "blank"
+                    if 2 <= r <= 7: return "hit"
+                    return "surge"
                 if color == "black":
                     # 1 Crit, 3 Hit (2-4), 1 Surge (5), 3 Blank (6-8)
                     if r == 1: return "crit"
@@ -495,8 +437,11 @@ class GameCompanion:
                     return "blank"
                 return "blank"
 
-            # Reset results
-            results = {"crit": 0, "hit": 0, "surge": 0, "blank": 0}
+            # Offensive Surge Conversion
+            # Check unit surge chart
+            surge_chart = unit.get("surge", {})
+            atk_surge = surge_chart.get("attack") # "hit", "crit" oder None
+            aims = var_aim.get()
             for color, count in pool.items():
                 for _ in range(count):
                     results[roll_legion_atk(color)] += 1
