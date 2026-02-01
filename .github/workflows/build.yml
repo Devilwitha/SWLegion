@@ -9,16 +9,22 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Use the official Kivy Buildozer Docker image
+    # Run as root to avoid permission issues with mounted volumes
+    container:
+      image: kivy/buildozer:latest
+      options: --user root
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Build with Buildozer
-        uses: ArtemSBulgakov/buildozer-action-docker@v1
-        with:
-          command: buildozer android debug
-          buildozer_version: master
+        run: |
+          # Ensure buildozer can run.
+          # We are root, so buildozer might warn, but it will work.
+          # 'yes' is to accept license agreements if prompted
+          yes | buildozer android debug
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
