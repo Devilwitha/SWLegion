@@ -15,7 +15,7 @@ else:
     # Running as Python script  
     from utilities import LegionUtils
 
-pversion = "1.2v"
+pversion = "1.4v"
 rversion = "2.5v"
 
 class MainMenu:
@@ -83,6 +83,9 @@ class MainMenu:
         btn_game = tk.Button(self.root, text="Spiel-Begleiter (Game Companion)", command=self.run_game_companion, width=30, height=2, bg="#4CAF50", fg="white", font=("Segoe UI", 10, "bold"))
         btn_game.pack(pady=10)
 
+        btn_music = tk.Button(self.root, text="🎵 Musik Player", command=self.run_music_player, width=30, height=2, bg="#E91E63", fg="white", font=("Segoe UI", 10, "bold"))
+        btn_music.pack(pady=10)
+
         # Separator line
         separator = tk.Frame(self.root, height=2, bd=1, relief=tk.SUNKEN)
         separator.pack(fill=tk.X, padx=40, pady=10)
@@ -106,6 +109,21 @@ class MainMenu:
 
     def run_game_companion(self):
         self.launch_script(os.path.join("utilities", "GameCompanion.py"))
+
+    def run_music_player(self):
+        """Öffne den Musik Player"""
+        try:
+            logging.info("Opening Music Player")
+            from utilities.MusicPlayer import MusicPlayer
+            new_window = tk.Toplevel()
+            new_window.withdraw()
+            app = MusicPlayer(new_window)
+            new_window.deiconify()
+            logging.info("Music Player opened successfully")
+        except Exception as e:
+            error_msg = f"Failed to open Music Player: {str(e)}"
+            logging.error(error_msg, exc_info=True)
+            messagebox.showerror("Fehler", f"Konnte Musik Player nicht öffnen:\n\n{str(e)}\n\nStelle sicher dass pygame installiert ist.")
 
     def launch_script(self, script_name):
         try:
