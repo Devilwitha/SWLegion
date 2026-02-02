@@ -3,6 +3,7 @@ from tkinter import ttk, messagebox
 import json
 import os
 import uuid
+from .LegionUtils import get_data_path
 
 class CustomCommandCardCreator:
     def __init__(self, root):
@@ -10,7 +11,7 @@ class CustomCommandCardCreator:
         self.root.title("SW Legion: Custom Command Card Creator")
         self.root.geometry("800x600")
 
-        self.custom_file = "db/custom_command_cards.json"
+        self.custom_file = get_data_path("db/custom_command_cards.json")
         self.cards_data = self.load_data()
 
         self.setup_ui()
@@ -27,6 +28,8 @@ class CustomCommandCardCreator:
 
     def save_data(self):
         try:
+            # Ensure directory exists
+            os.makedirs(os.path.dirname(self.custom_file), exist_ok=True)
             with open(self.custom_file, "w", encoding="utf-8") as f:
                 json.dump(self.cards_data, f, indent=4, ensure_ascii=False)
             messagebox.showinfo("Erfolg", "Daten erfolgreich gespeichert!")

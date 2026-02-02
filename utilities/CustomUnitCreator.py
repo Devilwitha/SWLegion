@@ -3,6 +3,7 @@ from tkinter import ttk, messagebox
 import json
 import os
 import uuid
+from .LegionUtils import get_data_path
 
 class CustomUnitCreator:
     def __init__(self, root):
@@ -10,7 +11,7 @@ class CustomUnitCreator:
         self.root.title("SW Legion: Custom Unit Creator")
         self.root.geometry("900x800")
 
-        self.custom_units_file = "db/custom_units.json"
+        self.custom_units_file = get_data_path("db/custom_units.json")
         self.units_data = self.load_data()
 
         self.setup_ui()
@@ -27,6 +28,8 @@ class CustomUnitCreator:
 
     def save_data(self):
         try:
+            # Ensure directory exists
+            os.makedirs(os.path.dirname(self.custom_units_file), exist_ok=True)
             with open(self.custom_units_file, "w", encoding="utf-8") as f:
                 json.dump(self.units_data, f, indent=4, ensure_ascii=False)
             messagebox.showinfo("Erfolg", "Daten erfolgreich gespeichert!")

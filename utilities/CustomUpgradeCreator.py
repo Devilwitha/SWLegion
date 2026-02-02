@@ -3,6 +3,7 @@ from tkinter import ttk, messagebox
 import json
 import os
 import uuid
+from .LegionUtils import get_data_path
 
 class CustomUpgradeCreator:
     def __init__(self, root):
@@ -10,7 +11,7 @@ class CustomUpgradeCreator:
         self.root.title("SW Legion: Custom Upgrade Creator")
         self.root.geometry("850x700")
 
-        self.custom_file = "db/custom_upgrades.json"
+        self.custom_file = get_data_path("db/custom_upgrades.json")
         self.upgrades_data = self.load_data()
 
         self.setup_ui()
@@ -27,6 +28,8 @@ class CustomUpgradeCreator:
 
     def save_data(self):
         try:
+            # Ensure directory exists
+            os.makedirs(os.path.dirname(self.custom_file), exist_ok=True)
             with open(self.custom_file, "w", encoding="utf-8") as f:
                 json.dump(self.upgrades_data, f, indent=4, ensure_ascii=False)
             messagebox.showinfo("Erfolg", "Daten erfolgreich gespeichert!")
