@@ -1,0 +1,105 @@
+name: Manual Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Build type'
+        required: true
+        default: 'installer'
+        type: choice
+        options:
+        - 'installer'
+        - 'portable'
+        - 'both'
+      create_draft_release:
+        description: 'Create draft release'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  manual-build:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pyinstaller
+        
+    - name: Install Inno Setup (if needed)
+      if: ${{ github.event.inputs.build_type == 'installer' || github.event.inputs.build_type == 'both' }}
+      run: |
+        Invoke-WebRequest -Uri "https://jrsoftware.org/download.php/is.exe" -OutFile "innosetup.exe"
+        Start-Process -FilePath "innosetup.exe" -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -Wait
+        echo "C:\Program Files (x86)\Inno Setup 6" >> $env:GITHUB_PATH
+        
+    - name: Build with PyInstaller
+      working-directory: build/Win
+      run: |
+        .\build.bat
+        
+    - name: Create installer
+      if: ${{ github.event.inputs.build_type == 'installer' || github.event.inputs.build_type == 'both' }}
+      working-directory: build/Win
+      run: |
+        iscc "SWLegion_Setup.iss"
+        
+    - name: Create portable package
+      if: ${{ github.event.inputs.build_type == 'portable' || github.event.inputs.build_type == 'both' }}
+      working-directory: build/Win
+      run: |
+        .\create_portable_package.bat
+        
+    - name: Upload installer (if created)
+      if: ${{ github.event.inputs.build_type == 'installer' || github.event.inputs.build_type == 'both' }}
+      uses: actions/upload-artifact@v3
+      with:
+        name: SWLegion-Installer-Manual
+        path: build/Win/InstallerSetup/SWLegion_Installer.exe
+        
+    - name: Upload portable package (if created)
+      if: ${{ github.event.inputs.build_type == 'portable' || github.event.inputs.build_type == 'both' }}
+      uses: actions/upload-artifact@v3
+      with:
+        name: SWLegion-Portable-Manual
+        path: build/Win/SWLegion_Portable.zip
+        
+    - name: Create draft release
+      if: ${{ github.event.inputs.create_draft_release == 'true' }}
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          build/Win/InstallerSetup/SWLegion_Installer.exe
+          build/Win/SWLegion_Portable.zip
+        name: Star Wars Legion Tool Suite (Manual Build)
+        body: |
+          ## Manual Build - Star Wars Legion Tool Suite
+          
+          This is a manual build created via GitHub Actions.
+          
+          ### 📦 Download Options:
+          - **SWLegion_Installer.exe**: Full Windows installer with setup wizard
+          - **SWLegion_Portable.zip**: Portable version (extract and run)
+          
+          ### 🚀 Features:
+          - Army Builder with visual marker system
+          - Mission Builder and Battle Companion  
+          - Custom Content Creator
+          - Battlefield Map Creator
+          
+        tag_name: manual-build-${{ github.run_number }}
+        draft: true
+        prerelease: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
