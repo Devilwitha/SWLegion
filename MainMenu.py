@@ -22,7 +22,7 @@ class MainMenu:
     def __init__(self, root):
         LegionUtils.setup_logging()
         self.root = root
-        self.root.title("Star Wars Legion: All-in-One Tool")
+        self.root.title("Star Wars Legion: All-in-One Tool  {pversion} (Rules {rversion})".format(pversion=pversion, rversion=rversion))
         self.root.geometry("400x700")
         
         # Set window icon
@@ -111,227 +111,168 @@ class MainMenu:
         try:
             logging.info(f"Launching submodule: {script_name}")
             
-            # Debug: Print execution environment
+            # Determine execution mode more reliably
             is_frozen = getattr(sys, 'frozen', False)
             has_meipass = hasattr(sys, '_MEIPASS')
-            executable_name = sys.executable.lower()
-            is_exe = executable_name.endswith('.exe') and 'python' not in executable_name
             
-            logging.info(f"Debug: sys.frozen = {is_frozen}, has _MEIPASS = {has_meipass}, executable = {executable_name}, is_exe = {is_exe}")
+            # For better compatibility, prefer direct imports when possible
+            # This works in both script and executable mode
+            logging.info(f"Execution mode - frozen: {is_frozen}, MEIPASS: {has_meipass}")
             
-            # Force direct module import if running from .exe or if any indicator shows PyInstaller
-            if is_frozen or has_meipass or is_exe:
-                # Running as PyInstaller executable - import and run modules directly
-                logging.info(f"Running as executable, using direct module import for {script_name}")
-                self.run_module_directly(script_name)
-            else:
-                # Running as Python script - check file exists and use subprocess
-                # Prüfen ob Datei existiert
+            # Always try direct import first (works in both modes)
+            if self.try_direct_import(script_name):
+                return
+                
+            # Fallback to subprocess for script mode only
+            if not is_frozen and not has_meipass:
+                logging.info(f"Fallback to subprocess for {script_name}")
+                # Check if file exists
                 if not os.path.exists(script_name):
                      error_msg = f"Script missing: {script_name}"
                      logging.error(error_msg)
                      messagebox.showerror("Fehler", f"Datei nicht gefunden: {script_name}")
                      return
 
-                # Use module execution if in utilities folder
-                if script_name.startswith("utilities") and script_name.endswith(".py"):
-                    module_name = script_name.replace(os.sep, ".").replace(".py", "")
-                    cmd = [sys.executable, "-m", module_name]
-                else:
-                    cmd = [sys.executable, script_name]
-
+                cmd = [sys.executable, script_name]
                 logging.info(f"Executing subprocess command: {cmd}")
                 subprocess.Popen(cmd)
+            else:
+                # If we're in executable mode and direct import failed, show error
+                raise ImportError(f"Could not import module for {script_name}")
 
         except Exception as e:
             error_msg = f"Failed to launch {script_name}: {str(e)}"
             logging.error(error_msg, exc_info=True)
             messagebox.showerror("Fehler", f"Konnte {script_name} nicht starten:\n\n{str(e)}\n\nSiehe Log für Details.")
 
-    def run_module_directly(self, script_name):
-        """Run modules directly when running as executable"""
+    def try_direct_import(self, script_name):
+        """Try to import and run modules directly. Returns True if successful, False otherwise."""
+    def try_direct_import(self, script_name):
+        """Try to import and run modules directly. Returns True if successful, False otherwise."""
         try:
             # Normalize path for comparison
             script_name = script_name.replace('\\', '/')
             logging.info(f"Attempting direct module import for: {script_name}")
             
-            # Log system state for debugging
-            logging.info(f"Python path: {sys.path}")
-            logging.info(f"Working directory: {os.getcwd()}")
-            if hasattr(sys, '_MEIPASS'):
-                logging.info(f"_MEIPASS directory: {sys._MEIPASS}")
-            
             if script_name == "utilities/GameCompanion.py":
                 logging.info("Importing GameCompanion module")
-                try:
-                    from utilities.GameCompanion import GameCompanion
-                    logging.info("GameCompanion import successful")
-                    new_window = tk.Toplevel()
-                    new_window.withdraw()  # Hide initially
-                    app = GameCompanion(new_window)
-                    new_window.deiconify()  # Show after setup
-                    logging.info("GameCompanion instance created successfully")
-                except ImportError as ie:
-                    logging.error(f"Failed to import GameCompanion: {ie}", exc_info=True)
-                    raise
-                except Exception as ee:
-                    logging.error(f"Failed to create GameCompanion instance: {ee}", exc_info=True)
-                    raise
+                from utilities.GameCompanion import GameCompanion
+                logging.info("GameCompanion import successful")
+                new_window = tk.Toplevel()
+                new_window.withdraw()  # Hide initially
+                app = GameCompanion(new_window)
+                new_window.deiconify()  # Show after setup
+                logging.info("GameCompanion instance created successfully")
+                return True
+                
             elif script_name == "utilities/ArmeeBuilder.py":
                 logging.info("Importing ArmeeBuilder module")
-                try:
-                    from utilities.ArmeeBuilder import LegionArmyBuilder  # Correct class name
-                    logging.info("ArmeeBuilder import successful")
-                    new_window = tk.Toplevel()
-                    new_window.withdraw()
-                    app = LegionArmyBuilder(new_window)
-                    new_window.deiconify()
-                    logging.info("ArmeeBuilder instance created successfully")
-                except ImportError as ie:
-                    logging.error(f"Failed to import ArmeeBuilder: {ie}", exc_info=True)
-                    raise
-                except Exception as ee:
-                    logging.error(f"Failed to create ArmeeBuilder instance: {ee}", exc_info=True)
-                    raise
+                from utilities.ArmeeBuilder import LegionArmyBuilder  # Correct class name
+                logging.info("ArmeeBuilder import successful")
+                new_window = tk.Toplevel()
+                new_window.withdraw()
+                app = LegionArmyBuilder(new_window)
+                new_window.deiconify()
+                logging.info("ArmeeBuilder instance created successfully")
+                return True
+                
             elif script_name == "utilities/MissionBuilder.py":
                 logging.info("Importing MissionBuilder module")
-                try:
-                    from utilities.MissionBuilder import LegionMissionGenerator  # Correct class name
-                    logging.info("MissionBuilder import successful")
-                    new_window = tk.Toplevel()
-                    new_window.withdraw()
-                    app = LegionMissionGenerator(new_window)
-                    new_window.deiconify()
-                    logging.info("MissionBuilder instance created successfully")
-                except ImportError as ie:
-                    logging.error(f"Failed to import MissionBuilder: {ie}", exc_info=True)
-                    raise
-                except Exception as ee:
-                    logging.error(f"Failed to create MissionBuilder instance: {ee}", exc_info=True)
-                    raise
+                from utilities.MissionBuilder import LegionMissionGenerator  # Correct class name
+                logging.info("MissionBuilder import successful")
+                new_window = tk.Toplevel()
+                new_window.withdraw()
+                app = LegionMissionGenerator(new_window)
+                new_window.deiconify()
+                logging.info("MissionBuilder instance created successfully")
+                return True
+                
             elif script_name == "utilities/CustomFactoryMenu.py":
                 logging.info("Importing CustomFactoryMenu module")
-                try:
-                    from utilities.CustomFactoryMenu import CustomFactoryMenu
-                    logging.info("CustomFactoryMenu import successful")
-                    new_window = tk.Toplevel()
-                    new_window.withdraw()
-                    app = CustomFactoryMenu(new_window)
-                    new_window.deiconify()
-                    logging.info("CustomFactoryMenu instance created successfully")
-                except ImportError as ie:
-                    logging.error(f"Failed to import CustomFactoryMenu: {ie}", exc_info=True)
-                    raise
-                except Exception as ee:
-                    logging.error(f"Failed to create CustomFactoryMenu instance: {ee}", exc_info=True)
-                    raise
+                from utilities.CustomFactoryMenu import CustomFactoryMenu
+                logging.info("CustomFactoryMenu import successful")
+                new_window = tk.Toplevel()
+                new_window.withdraw()
+                app = CustomFactoryMenu(new_window)
+                new_window.deiconify()
+                logging.info("CustomFactoryMenu instance created successfully")
+                return True
+                
             elif script_name == "utilities/BattlefieldMapCreator.py":
                 logging.info("Importing BattlefieldMapCreator module")
-                try:
-                    from utilities.BattlefieldMapCreator import BattlefieldMapCreator
-                    logging.info("BattlefieldMapCreator import successful")
-                    new_window = tk.Toplevel()
-                    new_window.withdraw()
-                    app = BattlefieldMapCreator(new_window)
-                    new_window.deiconify()
-                    logging.info("BattlefieldMapCreator instance created successfully")
-                except ImportError as ie:
-                    logging.error(f"Failed to import BattlefieldMapCreator: {ie}", exc_info=True)
-                    raise
-                except Exception as ee:
-                    logging.error(f"Failed to create BattlefieldMapCreator instance: {ee}", exc_info=True)
-                    raise
+                from utilities.BattlefieldMapCreator import BattlefieldMapCreator
+                logging.info("BattlefieldMapCreator import successful")
+                new_window = tk.Toplevel()
+                new_window.withdraw()
+                app = BattlefieldMapCreator(new_window)
+                new_window.deiconify()
+                logging.info("BattlefieldMapCreator instance created successfully")
+                return True
+                
             elif script_name == "utilities/CardPrinter.py":
                 logging.info("Importing CardPrinter module")
-                try:
-                    from utilities.CardPrinter import CardPrinter
-                    logging.info("CardPrinter import successful")
-                    new_window = tk.Toplevel()
-                    new_window.withdraw()
-                    app = CardPrinter(new_window)
-                    new_window.deiconify()
-                    logging.info("CardPrinter instance created successfully")
-                except ImportError as ie:
-                    logging.error(f"Failed to import CardPrinter: {ie}", exc_info=True)
-                    raise
-                except Exception as ee:
-                    logging.error(f"Failed to create CardPrinter instance: {ee}", exc_info=True)
-                    raise
+                from utilities.CardPrinter import CardPrinter
+                logging.info("CardPrinter import successful")
+                new_window = tk.Toplevel()
+                new_window.withdraw()
+                app = CardPrinter(new_window)
+                new_window.deiconify()
+                logging.info("CardPrinter instance created successfully")
+                return True
+                
             elif script_name == "utilities/CustomUnitCreator.py":
                 logging.info("Importing CustomUnitCreator module")
-                try:
-                    from utilities.CustomUnitCreator import CustomUnitCreator
-                    logging.info("CustomUnitCreator import successful")
-                    new_window = tk.Toplevel()
-                    new_window.withdraw()
-                    app = CustomUnitCreator(new_window)
-                    new_window.deiconify()
-                    logging.info("CustomUnitCreator instance created successfully")
-                except ImportError as ie:
-                    logging.error(f"Failed to import CustomUnitCreator: {ie}", exc_info=True)
-                    raise
-                except Exception as ee:
-                    logging.error(f"Failed to create CustomUnitCreator instance: {ee}", exc_info=True)
-                    raise
+                from utilities.CustomUnitCreator import CustomUnitCreator
+                logging.info("CustomUnitCreator import successful")
+                new_window = tk.Toplevel()
+                new_window.withdraw()
+                app = CustomUnitCreator(new_window)
+                new_window.deiconify()
+                logging.info("CustomUnitCreator instance created successfully")
+                return True
+                
             elif script_name == "utilities/CustomUpgradeCreator.py":
                 logging.info("Importing CustomUpgradeCreator module")
-                try:
-                    from utilities.CustomUpgradeCreator import CustomUpgradeCreator
-                    logging.info("CustomUpgradeCreator import successful")
-                    new_window = tk.Toplevel()
-                    new_window.withdraw()
-                    app = CustomUpgradeCreator(new_window)
-                    new_window.deiconify()
-                    logging.info("CustomUpgradeCreator instance created successfully")
-                except ImportError as ie:
-                    logging.error(f"Failed to import CustomUpgradeCreator: {ie}", exc_info=True)
-                    raise
-                except Exception as ee:
-                    logging.error(f"Failed to create CustomUpgradeCreator instance: {ee}", exc_info=True)
-                    raise
+                from utilities.CustomUpgradeCreator import CustomUpgradeCreator
+                logging.info("CustomUpgradeCreator import successful")
+                new_window = tk.Toplevel()
+                new_window.withdraw()
+                app = CustomUpgradeCreator(new_window)
+                new_window.deiconify()
+                logging.info("CustomUpgradeCreator instance created successfully")
+                return True
+                
             elif script_name == "utilities/CustomBattleCardCreator.py":
                 logging.info("Importing CustomBattleCardCreator module")
-                try:
-                    from utilities.CustomBattleCardCreator import CustomBattleCardCreator
-                    logging.info("CustomBattleCardCreator import successful")
-                    new_window = tk.Toplevel()
-                    new_window.withdraw()
-                    app = CustomBattleCardCreator(new_window)
-                    new_window.deiconify()
-                    logging.info("CustomBattleCardCreator instance created successfully")
-                except ImportError as ie:
-                    logging.error(f"Failed to import CustomBattleCardCreator: {ie}", exc_info=True)
-                    raise
-                except Exception as ee:
-                    logging.error(f"Failed to create CustomBattleCardCreator instance: {ee}", exc_info=True)
-                    raise
+                from utilities.CustomBattleCardCreator import CustomBattleCardCreator
+                logging.info("CustomBattleCardCreator import successful")
+                new_window = tk.Toplevel()
+                new_window.withdraw()
+                app = CustomBattleCardCreator(new_window)
+                new_window.deiconify()
+                logging.info("CustomBattleCardCreator instance created successfully")
+                return True
+                
             elif script_name == "utilities/CustomCommandCardCreator.py":
                 logging.info("Importing CustomCommandCardCreator module")
-                try:
-                    from utilities.CustomCommandCardCreator import CustomCommandCardCreator
-                    logging.info("CustomCommandCardCreator import successful")
-                    new_window = tk.Toplevel()
-                    new_window.withdraw()
-                    app = CustomCommandCardCreator(new_window)
-                    new_window.deiconify()
-                    logging.info("CustomCommandCardCreator instance created successfully")
-                except ImportError as ie:
-                    logging.error(f"Failed to import CustomCommandCardCreator: {ie}", exc_info=True)
-                    raise
-                except Exception as ee:
-                    logging.error(f"Failed to create CustomCommandCardCreator instance: {ee}", exc_info=True)
-                    raise
+                from utilities.CustomCommandCardCreator import CustomCommandCardCreator
+                logging.info("CustomCommandCardCreator import successful")
+                new_window = tk.Toplevel()
+                new_window.withdraw()
+                app = CustomCommandCardCreator(new_window)
+                new_window.deiconify()
+                logging.info("CustomCommandCardCreator instance created successfully")
+                return True
+                
             else:
+                # Module not configured for direct execution
                 logging.warning(f"Module {script_name} not configured for direct execution")
-                messagebox.showwarning("Warnung", f"Modul {script_name} nicht für direkte Ausführung konfiguriert")
-        except ImportError as e:
-            error_msg = f"Import error for {script_name}: {str(e)}"
-            logging.error(error_msg, exc_info=True)
-            messagebox.showerror("Import Fehler", f"Modul konnte nicht importiert werden: {script_name}\n\nFehler: {str(e)}\n\nSiehe Log für Details.")
+                return False
+                
         except Exception as e:
-            error_msg = f"Error running {script_name}: {str(e)}"
+            error_msg = f"Error during direct import of {script_name}: {str(e)}"
             logging.error(error_msg, exc_info=True)
-            messagebox.showerror("Fehler", f"Fehler beim Starten von {script_name}:\n\n{str(e)}\n\nSiehe Log für Details.")
+            return False
 
     def show_about(self):
         global pversion, rversion

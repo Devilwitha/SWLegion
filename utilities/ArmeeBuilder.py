@@ -8,7 +8,20 @@ import logging
 # TEIL 1: DIE DATENBANK (IMPORT)
 # =============================================================================
 
-from utilities.LegionData import LegionDatabase
+# Import LegionDatabase with compatibility for both script and package modes
+try:
+    # Try relative imports first (when imported as part of utilities package)
+    from .LegionData import LegionDatabase
+    from .LegionUtils import get_writable_path
+except ImportError:
+    try:
+        # Try package imports (when running with MainMenu)
+        from utilities.LegionData import LegionDatabase
+        from utilities.LegionUtils import get_writable_path
+    except ImportError:
+        # Fallback to absolute imports (when running as standalone script)
+        from LegionData import LegionDatabase
+        from LegionUtils import get_writable_path
 
 # =============================================================================
 # TEIL 2: DIE BENUTZEROBERFLÄCHE (GUI) UND SPEICHER-LOGIK
@@ -28,13 +41,9 @@ class LegionArmyBuilder:
         self.total_points = 0
         self.current_command_cards = []
         
-        # Basis-Ordner für Speicherstände erstellen
-        self.base_dir = "Armeen"
-        if not os.path.exists(self.base_dir):
-            try:
-                os.makedirs(self.base_dir)
-            except OSError as e:
-                messagebox.showerror("Fehler", f"Konnte Ordner nicht erstellen: {e}")
+        # Basis-Ordner für Speicherstände erstellen (beschreibbar)
+        self.base_dir = get_writable_path("Armeen")
+        logging.info(f"Using writable directory for armies: {self.base_dir}")
 
         self.setup_ui()
 

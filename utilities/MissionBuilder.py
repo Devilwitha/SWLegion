@@ -5,8 +5,22 @@ import random
 import os
 import sys
 import subprocess
-from utilities.LegionData import LegionDatabase
-from PIL import Image, ImageTk
+
+# Import LegionDatabase with compatibility for both script and package modes
+try:
+    # Try relative imports first (when imported as part of utilities package)
+    from .LegionData import LegionDatabase
+    from .LegionUtils import get_writable_path
+except ImportError:
+    try:
+        # Try package imports (when running with MainMenu)
+        from utilities.LegionData import LegionDatabase
+        from utilities.LegionUtils import get_writable_path
+    except ImportError:
+        # Fallback to absolute imports (when running as standalone script)
+        from LegionData import LegionDatabase
+        from LegionUtils import get_writable_path
+
 from PIL import Image, ImageTk
 
 try:
@@ -340,8 +354,7 @@ class LegionMissionGenerator:
             messagebox.showwarning("Fehler", "Bitte weise beiden Seiten eine Fraktion zu.")
             return
 
-        initial_dir = "Missions"
-        if not os.path.exists(initial_dir): os.makedirs(initial_dir)
+        initial_dir = get_writable_path("Missions")
 
         file_path = filedialog.asksaveasfilename(initialdir=initial_dir, title="Mission speichern", defaultextension=".json", filetypes=[("JSON", "*.json")])
         if file_path:

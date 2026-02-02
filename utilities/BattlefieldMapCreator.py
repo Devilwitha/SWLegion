@@ -4,6 +4,18 @@ import json
 import os
 from PIL import Image, ImageDraw
 
+# Import get_writable_path with compatibility for both script and package modes
+try:
+    # Try relative imports first (when imported as part of utilities package)
+    from .LegionUtils import get_writable_path
+except ImportError:
+    try:
+        # Try package imports (when running with MainMenu)
+        from utilities.LegionUtils import get_writable_path
+    except ImportError:
+        # Fallback to absolute imports (when running as standalone script)
+        from LegionUtils import get_writable_path
+
 class BattlefieldMapCreator:
     def __init__(self, root):
         self.root = root
@@ -156,11 +168,9 @@ class BattlefieldMapCreator:
                 "text": text
             })
 
-        f = filedialog.asksaveasfilename(defaultextension=".json", filetypes=[("JSON", "*.json")])
+        f = filedialog.asksaveasfilename(initialdir=get_writable_path("maps"), defaultextension=".json", filetypes=[("JSON", "*.json")])
         if f:
             try:
-                # Ensure directory exists
-                os.makedirs(os.path.dirname(f), exist_ok=True)
                 with open(f, "w") as file:
                     json.dump(items, file)
                 messagebox.showinfo("Erfolg", f"Karte gespeichert: {f}")
@@ -184,7 +194,7 @@ class BattlefieldMapCreator:
 
     def export_image(self):
         # Use PostScript to get high quality image or PIL grab
-        f = filedialog.asksaveasfilename(defaultextension=".png", filetypes=[("PNG", "*.png")])
+        f = filedialog.asksaveasfilename(initialdir=get_writable_path("maps"), defaultextension=".png", filetypes=[("PNG", "*.png")])
         if f:
             # Requires ghostscript usually for PS, so maybe just PIL grab logic or simple draw
             # Re-drawing on PIL Image
@@ -223,8 +233,6 @@ class BattlefieldMapCreator:
                     draw.text((coords[0], coords[1]), text, fill="black")
 
             try:
-                # Ensure directory exists
-                os.makedirs(os.path.dirname(f), exist_ok=True)
                 img.save(f)
                 messagebox.showinfo("Export", f"Bild gespeichert: {f}")
             except Exception as e:

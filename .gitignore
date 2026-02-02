@@ -4,6 +4,7 @@ Missions/8.json
 /Missions
 legion_app.log
 /maps
-/build/Win/dist
+/build/Win/dist/*
 gemini_key.txt
-/build/Win/build
+/build/Win/build/*
+/dist/SWLegion

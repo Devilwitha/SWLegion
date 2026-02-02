@@ -13,6 +13,44 @@ def get_data_path(relative_path):
         # Running as Python script - use relative path
         return relative_path
 
+def get_writable_path(folder_name):
+    """
+    Returns a writable directory path for user data, avoiding Program Files restrictions.
+    
+    Args:
+        folder_name (str): Name of the folder (e.g., 'Armeen', 'Missions', 'maps')
+    
+    Returns:
+        str: Full path to a writable directory
+    """
+    try:
+        if getattr(sys, 'frozen', False):
+            # Running as PyInstaller executable - use AppData
+            app_data = os.environ.get('APPDATA')
+            if app_data:
+                base_dir = os.path.join(app_data, 'Star Wars Legion Tool Suite')
+                user_dir = os.path.join(base_dir, folder_name)
+                os.makedirs(user_dir, exist_ok=True)
+                return user_dir
+            else:
+                # Fallback to user's Documents
+                user_docs = os.path.join(os.path.expanduser('~'), 'Documents', 'Star Wars Legion')
+                user_dir = os.path.join(user_docs, folder_name)
+                os.makedirs(user_dir, exist_ok=True)
+                return user_dir
+        else:
+            # Running as Python script - use current directory
+            user_dir = os.path.join(os.getcwd(), folder_name)
+            os.makedirs(user_dir, exist_ok=True)
+            return user_dir
+            
+    except Exception as e:
+        # Final fallback to user's home directory
+        logging.warning(f"Could not create preferred directory for {folder_name}, using fallback: {e}")
+        fallback_dir = os.path.join(os.path.expanduser('~'), 'SW_Legion_Data', folder_name)
+        os.makedirs(fallback_dir, exist_ok=True)
+        return fallback_dir
+
 def setup_logging(log_file="legion_app.log"):
     """
     Configures the logging module to write to a file and stdout.
