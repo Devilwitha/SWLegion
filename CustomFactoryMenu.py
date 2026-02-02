@@ -9,7 +9,7 @@ class CustomFactoryMenu:
     def __init__(self, root):
         self.root = root
         self.root.title("Custom Factory")
-        self.root.geometry("400x450")
+        self.root.geometry("400x600")
 
         tk.Label(self.root, text="Custom Factory", font=("Segoe UI", 16, "bold")).pack(pady=20)
 
@@ -22,7 +22,13 @@ class CustomFactoryMenu:
         btn_upgrades = tk.Button(self.root, text="3. Ausrüstung erstellen", command=self.run_upgrade_creator, width=30, height=2, bg="#FF5722", fg="white", font=("Segoe UI", 10, "bold"))
         btn_upgrades.pack(pady=10)
 
-        btn_print = tk.Button(self.root, text="4. Karten Layout & Druck", command=self.run_printer, width=30, height=2, bg="#009688", fg="white", font=("Segoe UI", 10, "bold"))
+        btn_battle = tk.Button(self.root, text="4. Schlachtkarten erstellen", command=self.run_battle_card_creator, width=30, height=2, bg="#607D8B", fg="white", font=("Segoe UI", 10, "bold"))
+        btn_battle.pack(pady=10)
+
+        btn_map = tk.Button(self.root, text="5. Schlachtfeld Planer", command=self.run_map_creator, width=30, height=2, bg="#795548", fg="white", font=("Segoe UI", 10, "bold"))
+        btn_map.pack(pady=10)
+
+        btn_print = tk.Button(self.root, text="6. Karten Layout & Druck", command=self.run_printer, width=30, height=2, bg="#009688", fg="white", font=("Segoe UI", 10, "bold"))
         btn_print.pack(pady=10)
 
     def run_unit_creator(self):
@@ -33,6 +39,12 @@ class CustomFactoryMenu:
 
     def run_upgrade_creator(self):
         self.launch("CustomUpgradeCreator.py")
+
+    def run_battle_card_creator(self):
+        self.launch("CustomBattleCardCreator.py")
+
+    def run_map_creator(self):
+        self.launch("BattlefieldMapCreator.py")
 
     def run_printer(self):
         self.launch("CardPrinter.py")

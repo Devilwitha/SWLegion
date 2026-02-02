@@ -13,10 +13,12 @@ class CardPrinter:
         self.custom_units_file = "custom_units.json"
         self.custom_cards_file = "custom_command_cards.json"
         self.custom_upgrades_file = "custom_upgrades.json"
+        self.custom_battle_file = "custom_battle_cards.json"
 
         self.units_data = self.load_json(self.custom_units_file)
         self.cards_data = self.load_json(self.custom_cards_file)
         self.upgrades_data = self.load_json(self.custom_upgrades_file)
+        self.battle_data = self.load_json(self.custom_battle_file)
 
         self.loaded_image = None
         self.preview_image = None # Helper for tkinter
@@ -36,7 +38,7 @@ class CardPrinter:
         top_frame.pack(fill=tk.X)
 
         tk.Label(top_frame, text="1. Wähle Typ:", bg="#ddd").pack(side=tk.LEFT)
-        self.cb_type = ttk.Combobox(top_frame, values=["Einheit", "Kommandokarte", "Ausrüstung"], state="readonly")
+        self.cb_type = ttk.Combobox(top_frame, values=["Einheit", "Kommandokarte", "Ausrüstung", "Schlachtkarte"], state="readonly")
         self.cb_type.pack(side=tk.LEFT, padx=5)
         self.cb_type.bind("<<ComboboxSelected>>", self.update_obj_list)
         self.cb_type.current(0)
@@ -75,6 +77,10 @@ class CardPrinter:
              for u in self.upgrades_data:
                 name = u.get("name", "???")
                 values.append(name)
+        elif mode == "Schlachtkarte":
+            for b in self.battle_data:
+                name = b.get("name", "???")
+                values.append(name)
         else:
             for c in self.cards_data:
                 name = c.get("name", "???")
@@ -104,6 +110,10 @@ class CardPrinter:
             for u in self.upgrades_data:
                 if u.get("name") == name:
                     return u, "upgrade"
+        elif mode == "Schlachtkarte":
+            for b in self.battle_data:
+                if b.get("name") == name:
+                    return b, "battle"
         else:
             for c in self.cards_data:
                 if c.get("name") == name:
@@ -121,6 +131,8 @@ class CardPrinter:
             W, H = 1050, 750
         elif mode == "upgrade":
             W, H = 480, 740
+        elif mode == "battle":
+            W, H = 1050, 750 # Landscape
         else:
             W, H = 750, 1050
 
@@ -203,6 +215,27 @@ class CardPrinter:
             for line in lines:
                 draw.text((20, ty), line, font=font_small, fill="black")
                 ty += 30
+
+        elif mode == "battle":
+            # Header (Color coded by category)
+            cat = data.get("category", "Objective")
+            colors = {"Objective": "#b71c1c", "Deployment": "#0d47a1", "Condition": "#1b5e20"}
+            col = colors.get(cat, "black")
+
+            draw.rectangle([20, 20, W-20, 100], fill=col)
+            draw.text((40, 30), cat.upper(), font=font_small, fill="white")
+            draw.text((40, 60), data.get("name", ""), font=font_title, fill="white")
+
+            # Main Text
+            draw.rectangle([100, 200, W-100, H-100], fill=(255, 255, 255, 200), outline=col, width=5)
+
+            import textwrap
+            lines = textwrap.wrap(data.get("text", ""), width=50)
+            ty = 250
+            for line in lines:
+                draw.text((120, ty), line, font=font_text, fill="black")
+                ty += 40
+
 
         else: # Command Card
             # Header

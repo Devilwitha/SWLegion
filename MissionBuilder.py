@@ -3,6 +3,10 @@ from tkinter import messagebox, filedialog, ttk
 import json
 import random
 import os
+import sys
+import subprocess
+from LegionData import LegionDatabase
+
 try:
     import requests
     REQUESTS_AVAILABLE = True
@@ -15,6 +19,7 @@ class LegionMissionGenerator:
         self.root.title("SW Legion: Mission & Map Generator")
         self.root.geometry("1400x900")
 
+        self.db = LegionDatabase()
         self.api_key = self.load_api_key()
         self.current_scenario_text = ""
         
@@ -131,18 +136,13 @@ class LegionMissionGenerator:
         frame_deploy_ctrl = tk.Frame(frame_map, bg="#eee")
         frame_deploy_ctrl.pack(fill="x", pady=10)
 
-        tk.Label(frame_deploy_ctrl, text="Aufstellung:", bg="#eee").pack(side="left")
-        self.combo_deploy = ttk.Combobox(frame_deploy_ctrl, values=[
+        # Load values from DB + Hardcoded defaults
+        self.default_deployments = [
             "Battle Lines", "The Long March", "Disarray", "Major Offensive", "Danger Close", "Hemmed In",
             "Hinterhalt (Ambush)", "Einkesselung (Encirclement)", "Nahkampf (Close Quarters)"
-        ], state="readonly")
-        self.combo_deploy.current(0)
-        self.combo_deploy.pack(side="left", padx=5)
-        self.combo_deploy.bind("<<ComboboxSelected>>", self.update_map)
+        ]
 
-        # Mission / Objective Control
-        tk.Label(frame_deploy_ctrl, text="Mission:", bg="#eee").pack(side="left", padx=(10,0))
-        self.combo_mission = ttk.Combobox(frame_deploy_ctrl, values=[
+        self.default_missions = [
             "Kein Marker",
             "Abfangen (Intercept)",
             "Schlüsselpositionen (Key Positions)",
@@ -151,7 +151,24 @@ class LegionMissionGenerator:
             "Evakuierung (Hostage)",
             "Vorräte bergen (Recover Supplies)",
             "Sabotage"
-        ], state="readonly")
+        ]
+
+        # Fetch custom cards
+        custom_deploy = [c["name"] for c in self.db.battle_cards if c.get("category") == "Deployment"]
+        custom_mission = [c["name"] for c in self.db.battle_cards if c.get("category") == "Objective"]
+
+        all_deploy = self.default_deployments + custom_deploy
+        all_mission = self.default_missions + custom_mission
+
+        tk.Label(frame_deploy_ctrl, text="Aufstellung:", bg="#eee").pack(side="left")
+        self.combo_deploy = ttk.Combobox(frame_deploy_ctrl, values=all_deploy, state="readonly", width=25)
+        self.combo_deploy.current(0)
+        self.combo_deploy.pack(side="left", padx=5)
+        self.combo_deploy.bind("<<ComboboxSelected>>", self.update_map)
+
+        # Mission / Objective Control
+        tk.Label(frame_deploy_ctrl, text="Mission:", bg="#eee").pack(side="left", padx=(10,0))
+        self.combo_mission = ttk.Combobox(frame_deploy_ctrl, values=all_mission, state="readonly", width=25)
         self.combo_mission.current(0)
         self.combo_mission.pack(side="left", padx=5)
         self.combo_mission.bind("<<ComboboxSelected>>", self.update_map)
@@ -178,18 +195,30 @@ class LegionMissionGenerator:
         self.combo_red.pack()
         self.combo_red.bind("<<ComboboxSelected>>", self.update_map)
 
-        # Save Mission
-        tk.Button(frame_map, text="💾 Mission Speichern (für Game Companion)", command=self.save_mission, bg="#4CAF50", fg="white", font=("bold", 12)).pack(pady=20)
+        # Save Mission & Launch Creator
+        btn_frame = tk.Frame(frame_map, bg="#eee")
+        btn_frame.pack(pady=20)
+
+        tk.Button(btn_frame, text="💾 Mission Speichern", command=self.save_mission, bg="#4CAF50", fg="white", font=("bold", 12)).pack(side=tk.LEFT, padx=10)
+        tk.Button(btn_frame, text="✏ Schlachtfeld-Planer öffnen", command=self.launch_map_creator, bg="#9C27B0", fg="white", font=("bold", 12)).pack(side=tk.LEFT, padx=10)
 
         # Draw Initial
         self.update_map()
 
-    def random_deploy(self):
-        opts_dep = ["Battle Lines", "The Long March", "Disarray", "Major Offensive", "Danger Close", "Hemmed In", "Hinterhalt (Ambush)", "Einkesselung (Encirclement)", "Nahkampf (Close Quarters)"]
-        self.combo_deploy.set(random.choice(opts_dep))
+    def launch_map_creator(self):
+        script_name = "BattlefieldMapCreator.py"
+        if os.path.exists(script_name):
+            subprocess.Popen([sys.executable, script_name])
+        else:
+            messagebox.showerror("Fehler", "BattlefieldMapCreator.py nicht gefunden.")
 
-        opts_mis = ["Abfangen (Intercept)", "Schlüsselpositionen (Key Positions)", "Durchbruch (Breakthrough)", "Eliminierung (Deathmatch)", "Evakuierung (Hostage)", "Vorräte bergen (Recover Supplies)", "Sabotage"]
-        self.combo_mission.set(random.choice(opts_mis))
+    def random_deploy(self):
+        # Update values in case custom ones changed (simplified)
+        vals_d = self.combo_deploy['values']
+        vals_m = self.combo_mission['values']
+
+        self.combo_deploy.set(random.choice(vals_d))
+        self.combo_mission.set(random.choice(vals_m))
 
         self.update_map()
 

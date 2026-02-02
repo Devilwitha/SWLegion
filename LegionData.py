@@ -10,6 +10,7 @@ class LegionDatabase:
         self.units = {}
         self.upgrades = []
         self.command_cards = []
+        self.battle_cards = []
 
         # --- TRANSLATION MAP (Generated from previous data) ---
         self.translations = {
@@ -160,6 +161,24 @@ class LegionDatabase:
         self.load_custom_units()
         self.load_custom_command_cards()
         self.load_custom_upgrades()
+        self.load_custom_battle_cards()
+
+    def load_custom_battle_cards(self):
+        """Loads custom battle cards from custom_battle_cards.json."""
+        if not os.path.exists("custom_battle_cards.json"):
+            return
+
+        try:
+            logging.info("Loading custom battle cards...")
+            with open("custom_battle_cards.json", "r", encoding="utf-8") as f:
+                cards = json.load(f)
+
+            for c in cards:
+                c["is_custom"] = True
+                self.battle_cards.append(c)
+
+        except Exception as e:
+            logging.error(f"Error loading custom battle cards: {e}")
 
     def load_custom_upgrades(self):
         """Loads custom upgrades from custom_upgrades.json."""
