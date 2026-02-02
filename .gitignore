@@ -2,3 +2,5 @@
 *.pyc
 Missions/8.json
 /Missions
+legion_app.log
+/maps
