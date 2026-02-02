@@ -4,8 +4,8 @@ Dieses Repository enthält automatisierte Build- und Release-Workflows für Star
 
 ## 🔄 Verfügbare Workflows
 
-### 1. Build and Release (`build-and-release.yml`)
-**Automatischer Workflow** der ausgelöst wird bei:
+### Build and Release with Installer (`build-release-installer.yml`)
+**Haupt-Workflow** der ausgelöst wird bei:
 - Push zu `main`/`master` Branch
 - Erstellung von Tags (v1.0, v1.1, etc.)
 - Pull Requests
@@ -13,16 +13,11 @@ Dieses Repository enthält automatisierte Build- und Release-Workflows für Star
 
 **Funktionen:**
 - ✅ Automatische PyInstaller Build-Erstellung
-- ✅ Inno Setup Installer-Generierung  
+- ✅ Inno Setup Installation via Chocolatey  
+- ✅ Windows Installer (.exe) Generierung
 - ✅ Artifact-Upload für Downloads
 - ✅ Automatische GitHub Releases bei Tags
-- ✅ Installer-Tests
-
-### 2. Manual Build (`manual-build.yml`)
-**Manueller Workflow** mit Optionen:
-- 🎯 **Build-Typ auswählen**: Installer, Portable oder beides
-- 🎯 **Draft Release erstellen**: Optional
-- ✅ Flexible Build-Konfiguration
+- ✅ Umfangreiche Build-Verifikation
 
 ## 🚀 Verwendung
 
@@ -31,17 +26,14 @@ Dieses Repository enthält automatisierte Build- und Release-Workflows für Star
 2. Tag pushen: `git push origin v1.0.0`
 3. GitHub Actions erstellt automatisch:
    - PyInstaller Build
-   - Inno Setup Installer
+   - Windows Installer mit Inno Setup
    - GitHub Release mit Download-Links
 
 ### Manuelle Builds
-1. Gehe zu **Actions** → **Manual Build**
+1. Gehe zu **Actions** → **Build and Release with Installer**
 2. Klicke **"Run workflow"**
-3. Wähle Build-Optionen:
-   - `installer`: Nur Windows-Installer (.exe)
-   - `portable`: Nur Portable-ZIP
-   - `both`: Beide Varianten
-4. Optional: Draft Release erstellen
+3. Wähle Branch aus
+4. Workflow startet automatisch
 
 ## 📦 Build-Ausgaben
 
