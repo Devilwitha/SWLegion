@@ -4,3 +4,7 @@
 2026-02-01 17:11:51,984 - root - INFO - Logging initialized.
 2026-02-01 17:11:53,003 - root - INFO - Launching submodule: MissionBuilder.py
 2026-02-01 17:13:19,618 - root - INFO - Launching submodule: GameCompanion.py
+2026-02-02 07:57:14,413 - root - INFO - Logging initialized.
+2026-02-02 07:57:16,120 - root - INFO - Launching submodule: ArmeeBuilder.py
+2026-02-02 08:06:15,222 - root - INFO - Logging initialized.
+2026-02-02 08:06:21,413 - root - INFO - Launching submodule: ArmeeBuilder.py
