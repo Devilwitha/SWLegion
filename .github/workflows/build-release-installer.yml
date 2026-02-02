@@ -50,20 +50,42 @@ jobs:
         
     - name: Build executable with PyInstaller
       run: |
-        cd build\Win
-        python -m PyInstaller --clean --noconfirm SWLegion.spec
+        # Check if build directory exists
+        if (!(Test-Path "build\Win")) {
+          Write-Host "⚠️ build\Win not found, building from root directory"
+          # Build from root using build\Win\SWLegion.spec
+          python -m PyInstaller --clean --noconfirm "build\Win\SWLegion.spec"
+        } else {
+          cd build\Win
+          python -m PyInstaller --clean --noconfirm SWLegion.spec
+        }
         
     - name: Verify PyInstaller build
       run: |
-        if (!(Test-Path "build\Win\dist\SWLegion\SWLegion.exe")) {
+        # Check multiple possible locations
+        $exePath = ""
+        if (Test-Path "build\Win\dist\SWLegion\SWLegion.exe") {
+          $exePath = "build\Win\dist\SWLegion\SWLegion.exe"
+        } elseif (Test-Path "dist\SWLegion\SWLegion.exe") {
+          $exePath = "dist\SWLegion\SWLegion.exe"
+        }
+        
+        if ($exePath -eq "") {
           throw "❌ PyInstaller build failed - SWLegion.exe not found"
         }
-        Write-Host "✅ PyInstaller build successful"
+        
+        Write-Host "✅ PyInstaller build successful: $exePath"
+        
+        # Prepare for installer - copy to standardized location
+        if (Test-Path "pyinstaller_dist") { Remove-Item -Recurse -Force "pyinstaller_dist" }
+        if ($exePath.StartsWith("build\Win\")) {
+          Copy-Item "build\Win\dist\SWLegion" -Destination "pyinstaller_dist" -Recurse
+        } else {
+          Copy-Item "dist\SWLegion" -Destination "pyinstaller_dist" -Recurse
+        }
         
     - name: Create Windows installer with Inno Setup
       run: |
-        cd build\Win
-        
         # Verify Inno Setup is available
         $iscc = Get-Command "iscc.exe" -ErrorAction SilentlyContinue
         if (-not $iscc) {
@@ -76,29 +98,29 @@ jobs:
           }
         }
         
-        # Compile installer
-        iscc.exe "SWLegion_Setup.iss"
+        # Compile installer using the GitHub-specific .iss file
+        iscc.exe "SWLegion_GitHub_Setup.iss"
         
         # Verify installer was created
-        if (!(Test-Path "InstallerSetup\SWLegion_Installer.exe")) {
+        if (!(Test-Path "installer_output\SWLegion_Installer.exe")) {
           throw "❌ Installer creation failed"
         }
         
-        $installer = Get-Item "InstallerSetup\SWLegion_Installer.exe"
+        $installer = Get-Item "installer_output\SWLegion_Installer.exe"
         Write-Host "✅ Installer created: $($installer.Name) ($([math]::Round($installer.Length / 1MB, 1)) MB)"
         
     - name: Upload installer artifact
       uses: actions/upload-artifact@v4
       with:
         name: SWLegion-Installer-${{ github.sha }}
-        path: build/Win/InstallerSetup/SWLegion_Installer.exe
+        path: installer_output/SWLegion_Installer.exe
         retention-days: 90
         
     - name: Upload portable build
       uses: actions/upload-artifact@v4
       with:
         name: SWLegion-Portable-${{ github.sha }}
-        path: build/Win/dist/SWLegion/
+        path: pyinstaller_dist/
         retention-days: 30
         
   release:
