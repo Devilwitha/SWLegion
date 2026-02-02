@@ -50,44 +50,39 @@ jobs:
         
     - name: Build executable with PyInstaller
       run: |
-        # Ensure build directories exist (they should from checkout)
+        # Check if build directory exists
         if (!(Test-Path "build\Win")) {
-          Write-Host "❌ build\Win directory missing from repository"
-          throw "Required build directory structure missing"
+          Write-Host "⚠️ build\Win not found, building from root directory"
+          # Build from root using build\Win\SWLegion.spec
+          python -m PyInstaller --clean --noconfirm "build\Win\SWLegion.spec"
+        } else {
+          cd build\Win
+          python -m PyInstaller --clean --noconfirm SWLegion.spec
         }
-        
-        # Verify spec file exists
-        if (!(Test-Path "build\Win\SWLegion.spec")) {
-          Write-Host "❌ SWLegion.spec not found"
-          throw "PyInstaller spec file missing"
-        }
-        
-        Write-Host "✅ Building from build\Win directory"
-        cd build\Win
-        python -m PyInstaller --clean --noconfirm SWLegion.spec
         
     - name: Verify PyInstaller build
       run: |
-        # PyInstaller output should be in build\Win\dist\SWLegion\
-        $exePath = "build\Win\dist\SWLegion\SWLegion.exe"
+        # Check multiple possible locations
+        $exePath = ""
+        if (Test-Path "build\Win\dist\SWLegion\SWLegion.exe") {
+          $exePath = "build\Win\dist\SWLegion\SWLegion.exe"
+        } elseif (Test-Path "dist\SWLegion\SWLegion.exe") {
+          $exePath = "dist\SWLegion\SWLegion.exe"
+        }
         
-        if (!(Test-Path $exePath)) {
-          Write-Host "❌ PyInstaller build failed - SWLegion.exe not found at $exePath"
-          # List what was actually created for debugging
-          Write-Host "Contents of build\Win\dist:"
-          if (Test-Path "build\Win\dist") {
-            Get-ChildItem "build\Win\dist" -Recurse | ForEach-Object { Write-Host "  $($_.FullName)" }
-          } else {
-            Write-Host "  build\Win\dist directory not found"
-          }
-          throw "PyInstaller build failed"
+        if ($exePath -eq "") {
+          throw "❌ PyInstaller build failed - SWLegion.exe not found"
         }
         
         Write-Host "✅ PyInstaller build successful: $exePath"
         
         # Prepare for installer - copy to standardized location
         if (Test-Path "pyinstaller_dist") { Remove-Item -Recurse -Force "pyinstaller_dist" }
-        Copy-Item "build\Win\dist\SWLegion" -Destination "pyinstaller_dist" -Recurse
+        if ($exePath.StartsWith("build\Win\")) {
+          Copy-Item "build\Win\dist\SWLegion" -Destination "pyinstaller_dist" -Recurse
+        } else {
+          Copy-Item "dist\SWLegion" -Destination "pyinstaller_dist" -Recurse
+        }
         
     - name: Create Windows installer with Inno Setup
       run: |
