@@ -16,7 +16,36 @@ def get_data_path(relative_path):
 def setup_logging(log_file="legion_app.log"):
     """
     Configures the logging module to write to a file and stdout.
+    Uses a writable directory for the log file (AppData or application directory).
     """
+    # Determine a writable location for the log file
+    try:
+        if getattr(sys, 'frozen', False):
+            # Running as PyInstaller executable
+            # Try AppData directory first
+            app_data = os.environ.get('APPDATA')
+            if app_data:
+                log_dir = os.path.join(app_data, 'Star Wars Legion Tool Suite')
+                os.makedirs(log_dir, exist_ok=True)
+                log_file = os.path.join(log_dir, log_file)
+            else:
+                # Fallback to temp directory
+                log_file = os.path.join(os.path.expanduser('~'), log_file)
+        else:
+            # Running as Python script - use current directory
+            log_file = os.path.join(os.getcwd(), log_file)
+            
+        # Test if we can write to the log file location
+        test_path = os.path.dirname(log_file) if os.path.dirname(log_file) else '.'
+        if not os.access(test_path, os.W_OK):
+            # Fallback to user's home directory
+            log_file = os.path.join(os.path.expanduser('~'), os.path.basename(log_file))
+            
+    except Exception as e:
+        # Final fallback to a basic filename in user's home
+        log_file = os.path.join(os.path.expanduser('~'), "legion_app.log")
+        print(f"Warning: Could not determine log file location, using fallback: {log_file}")
+
     # Create logger
     logger = logging.getLogger()
     logger.setLevel(logging.DEBUG)  # Capture all levels including DEBUG
@@ -29,10 +58,15 @@ def setup_logging(log_file="legion_app.log"):
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
     # File Handler - capture all messages including errors
-    file_handler = logging.FileHandler(log_file, mode='a', encoding='utf-8')
-    file_handler.setLevel(logging.DEBUG)  # Log everything to file
-    file_handler.setFormatter(formatter)
-    logger.addHandler(file_handler)
+    try:
+        file_handler = logging.FileHandler(log_file, mode='a', encoding='utf-8')
+        file_handler.setLevel(logging.DEBUG)  # Log everything to file
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
+        print(f"Logging to: {log_file}")
+    except (PermissionError, OSError) as e:
+        print(f"Warning: Could not create log file at {log_file}: {e}")
+        # Continue without file logging if we can't write to any location
 
     # Console Handler - only show INFO and above on console
     console_handler = logging.StreamHandler(sys.stdout)
