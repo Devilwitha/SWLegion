@@ -61,10 +61,16 @@ german.WelcomeLabel2=Dieses Programm wird [name/ver] auf Ihrem Computer installi
 
 [Code]
 function InitializeSetup(): Boolean;
+var
+  Version: TWindowsVersion;
 begin
   // Check Windows version (minimum Windows 10)
-  if not IsWindows10OrLater then begin
-    MsgBox('This application requires Windows 10 or later.', mbError, MB_OK);
+  // Windows 10 has major version 10, minor version 0
+  GetWindowsVersionEx(Version);
+  if (Version.Major < 10) then begin
+    MsgBox('This application requires Windows 10 or later.' + #13#10 + 
+           'Current version: ' + IntToStr(Version.Major) + '.' + IntToStr(Version.Minor), 
+           mbError, MB_OK);
     Result := False;
   end else
     Result := True;
