@@ -8,7 +8,7 @@ import logging
 # TEIL 1: DIE DATENBANK (IMPORT)
 # =============================================================================
 
-from LegionData import LegionDatabase
+from utilities.LegionData import LegionDatabase
 
 # =============================================================================
 # TEIL 2: DIE BENUTZEROBERFLÄCHE (GUI) UND SPEICHER-LOGIK

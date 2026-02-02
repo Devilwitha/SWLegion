@@ -10,7 +10,7 @@ class CustomUpgradeCreator:
         self.root.title("SW Legion: Custom Upgrade Creator")
         self.root.geometry("850x700")
 
-        self.custom_file = "custom_upgrades.json"
+        self.custom_file = "db/custom_upgrades.json"
         self.upgrades_data = self.load_data()
 
         self.setup_ui()

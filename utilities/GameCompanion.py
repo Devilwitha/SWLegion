@@ -4,8 +4,8 @@ import json
 import random
 import os
 import logging
-from LegionData import LegionDatabase
-from LegionRules import LegionRules
+from utilities.LegionData import LegionDatabase
+from utilities.LegionRules import LegionRules
 from PIL import Image, ImageTk
 from PIL import Image, ImageTk
 

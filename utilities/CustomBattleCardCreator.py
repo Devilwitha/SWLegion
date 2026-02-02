@@ -10,7 +10,7 @@ class CustomBattleCardCreator:
         self.root.title("SW Legion: Custom Battle Card Creator")
         self.root.geometry("1100x700")
 
-        self.custom_file = "custom_battle_cards.json"
+        self.custom_file = "db/custom_battle_cards.json"
         self.maps_dir = "maps"
         if not os.path.exists(self.maps_dir):
             os.makedirs(self.maps_dir)

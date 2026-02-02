@@ -10,7 +10,7 @@ class CustomUnitCreator:
         self.root.title("SW Legion: Custom Unit Creator")
         self.root.geometry("900x800")
 
-        self.custom_units_file = "custom_units.json"
+        self.custom_units_file = "db/custom_units.json"
         self.units_data = self.load_data()
 
         self.setup_ui()

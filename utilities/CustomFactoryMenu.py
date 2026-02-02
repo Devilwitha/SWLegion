@@ -32,22 +32,22 @@ class CustomFactoryMenu:
         btn_print.pack(pady=10)
 
     def run_unit_creator(self):
-        self.launch("CustomUnitCreator.py")
+        self.launch(os.path.join("utilities", "CustomUnitCreator.py"))
 
     def run_card_creator(self):
-        self.launch("CustomCommandCardCreator.py")
+        self.launch(os.path.join("utilities", "CustomCommandCardCreator.py"))
 
     def run_upgrade_creator(self):
-        self.launch("CustomUpgradeCreator.py")
+        self.launch(os.path.join("utilities", "CustomUpgradeCreator.py"))
 
     def run_battle_card_creator(self):
-        self.launch("CustomBattleCardCreator.py")
+        self.launch(os.path.join("utilities", "CustomBattleCardCreator.py"))
 
     def run_map_creator(self):
-        self.launch("BattlefieldMapCreator.py")
+        self.launch(os.path.join("utilities", "BattlefieldMapCreator.py"))
 
     def run_printer(self):
-        self.launch("CardPrinter.py")
+        self.launch(os.path.join("utilities", "CardPrinter.py"))
 
     def launch(self, script_name):
         try:

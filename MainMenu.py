@@ -5,7 +5,7 @@ import sys
 import subprocess
 import logging
 from PIL import Image, ImageTk
-import LegionUtils
+from utilities import LegionUtils
 pversion = "1.0v"
 rversion = "2.5v"
 
@@ -60,16 +60,16 @@ class MainMenu:
         tk.Label(self.root, text="Wähle ein Modul um zu starten.", font=("Segoe UI", 10)).pack(pady=20)
 
     def run_custom_factory(self):
-        self.launch_script("CustomFactoryMenu.py")
+        self.launch_script(os.path.join("utilities", "CustomFactoryMenu.py"))
 
     def run_army_builder(self):
-        self.launch_script("ArmeeBuilder.py")
+        self.launch_script(os.path.join("utilities", "ArmeeBuilder.py"))
 
     def run_mission_builder(self):
-        self.launch_script("MissionBuilder.py")
+        self.launch_script(os.path.join("utilities", "MissionBuilder.py"))
 
     def run_game_companion(self):
-        self.launch_script("GameCompanion.py")
+        self.launch_script(os.path.join("utilities", "GameCompanion.py"))
 
     def launch_script(self, script_name):
         try:
@@ -81,7 +81,14 @@ class MainMenu:
 
             # subprocess.Popen erlaubt paralleles Ausführen ohne die GUI einzufrieren
             logging.info(f"Launching submodule: {script_name}")
-            cmd = [sys.executable, script_name]
+
+            # Use module execution if in utilities folder
+            if script_name.startswith("utilities") and script_name.endswith(".py"):
+                module_name = script_name.replace(os.sep, ".").replace(".py", "")
+                cmd = [sys.executable, "-m", module_name]
+            else:
+                cmd = [sys.executable, script_name]
+
             subprocess.Popen(cmd)
 
         except Exception as e:

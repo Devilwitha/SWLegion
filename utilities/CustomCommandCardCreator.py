@@ -10,7 +10,7 @@ class CustomCommandCardCreator:
         self.root.title("SW Legion: Custom Command Card Creator")
         self.root.geometry("800x600")
 
-        self.custom_file = "custom_command_cards.json"
+        self.custom_file = "db/custom_command_cards.json"
         self.cards_data = self.load_data()
 
         self.setup_ui()

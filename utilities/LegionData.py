@@ -1,7 +1,7 @@
 import json
 import os
 import logging
-from LegionRules import LegionRules
+from utilities.LegionRules import LegionRules
 
 class LegionDatabase:
     def __init__(self):
@@ -165,12 +165,12 @@ class LegionDatabase:
 
     def load_custom_battle_cards(self):
         """Loads custom battle cards from custom_battle_cards.json."""
-        if not os.path.exists("custom_battle_cards.json"):
+        if not os.path.exists("db/custom_battle_cards.json"):
             return
 
         try:
             logging.info("Loading custom battle cards...")
-            with open("custom_battle_cards.json", "r", encoding="utf-8") as f:
+            with open("db/custom_battle_cards.json", "r", encoding="utf-8") as f:
                 cards = json.load(f)
 
             for c in cards:
@@ -182,12 +182,12 @@ class LegionDatabase:
 
     def load_custom_upgrades(self):
         """Loads custom upgrades from custom_upgrades.json."""
-        if not os.path.exists("custom_upgrades.json"):
+        if not os.path.exists("db/custom_upgrades.json"):
             return
 
         try:
             logging.info("Loading custom upgrades...")
-            with open("custom_upgrades.json", "r", encoding="utf-8") as f:
+            with open("db/custom_upgrades.json", "r", encoding="utf-8") as f:
                 upgrades = json.load(f)
 
             for u in upgrades:
@@ -199,12 +199,12 @@ class LegionDatabase:
 
     def load_custom_command_cards(self):
         """Loads custom command cards from custom_command_cards.json."""
-        if not os.path.exists("custom_command_cards.json"):
+        if not os.path.exists("db/custom_command_cards.json"):
             return
 
         try:
             logging.info("Loading custom command cards...")
-            with open("custom_command_cards.json", "r", encoding="utf-8") as f:
+            with open("db/custom_command_cards.json", "r", encoding="utf-8") as f:
                 cards = json.load(f)
 
             for c in cards:
@@ -225,12 +225,12 @@ class LegionDatabase:
 
     def load_custom_units(self):
         """Loads custom units from custom_units.json."""
-        if not os.path.exists("custom_units.json"):
+        if not os.path.exists("db/custom_units.json"):
             return
 
         try:
             logging.info("Loading custom units...")
-            with open("custom_units.json", "r", encoding="utf-8") as f:
+            with open("db/custom_units.json", "r", encoding="utf-8") as f:
                 custom_data = json.load(f)
 
             for entry in custom_data:
@@ -265,14 +265,14 @@ class LegionDatabase:
         return self.translations.get(category, {}).get(key.lower(), default)
 
     def load_catalog(self):
-        if not os.path.exists("catalog.json"):
-            logging.warning("catalog.json not found! Using internal legacy data only.")
-            print("Warning: catalog.json not found!")
+        if not os.path.exists("db/catalog.json"):
+            logging.warning("db/catalog.json not found! Using internal legacy data only.")
+            print("Warning: db/catalog.json not found!")
             return
 
         try:
             logging.info("Loading catalog.json...")
-            with open("catalog.json", "r", encoding="utf-8") as f:
+            with open("db/catalog.json", "r", encoding="utf-8") as f:
                 data = json.load(f)
 
             # Process Units

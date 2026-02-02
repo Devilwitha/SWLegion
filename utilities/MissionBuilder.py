@@ -5,7 +5,7 @@ import random
 import os
 import sys
 import subprocess
-from LegionData import LegionDatabase
+from utilities.LegionData import LegionDatabase
 from PIL import Image, ImageTk
 from PIL import Image, ImageTk
 
@@ -29,8 +29,6 @@ class LegionMissionGenerator:
             self.root.iconphoto(True, self.icon_photo)
         except:
             pass
-
-        self.db = LegionDatabase()
 
         self.db = LegionDatabase()
         self.api_key = self.load_api_key()
@@ -230,7 +228,7 @@ class LegionMissionGenerator:
         self.update_map()
 
     def launch_map_creator(self):
-        script_name = "BattlefieldMapCreator.py"
+        script_name = os.path.join("utilities", "BattlefieldMapCreator.py")
         if os.path.exists(script_name):
             subprocess.Popen([sys.executable, script_name])
         else:
