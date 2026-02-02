@@ -15,8 +15,8 @@ class MainMenu:
 
         tk.Label(self.root, text="Star Wars Legion Zentrale", font=("Segoe UI", 16, "bold")).pack(pady=20)
 
-        btn_custom = tk.Button(self.root, text="Custom Unit Creator", command=self.run_custom_unit_creator, width=30, height=2, bg="#9C27B0", fg="white", font=("Segoe UI", 10, "bold"))
-        btn_custom.pack(pady=10)
+        btn_factory = tk.Button(self.root, text="Custom Factory", command=self.run_custom_factory, width=30, height=2, bg="#9C27B0", fg="white", font=("Segoe UI", 10, "bold"))
+        btn_factory.pack(pady=10)
 
         btn_army = tk.Button(self.root, text="Armee Builder", command=self.run_army_builder, width=30, height=2, bg="#2196F3", fg="white", font=("Segoe UI", 10, "bold"))
         btn_army.pack(pady=10)
@@ -29,8 +29,8 @@ class MainMenu:
 
         tk.Label(self.root, text="Wähle ein Modul um zu starten.", font=("Segoe UI", 10)).pack(pady=20)
 
-    def run_custom_unit_creator(self):
-        self.launch_script("CustomUnitCreator.py")
+    def run_custom_factory(self):
+        self.launch_script("CustomFactoryMenu.py")
 
     def run_army_builder(self):
         self.launch_script("ArmeeBuilder.py")
