@@ -31,6 +31,13 @@ class CustomFactoryMenu:
         btn_print = tk.Button(self.root, text="6. Karten Layout & Druck", command=self.run_printer, width=30, height=2, bg="#009688", fg="white", font=("Segoe UI", 10, "bold"))
         btn_print.pack(pady=10)
 
+        # Separator
+        separator = tk.Frame(self.root, height=2, bd=1, relief=tk.SUNKEN)
+        separator.pack(fill=tk.X, padx=20, pady=15)
+
+        btn_catalog = tk.Button(self.root, text="7. Catalog.json bearbeiten", command=self.run_catalog_editor, width=30, height=2, bg="#FF9800", fg="white", font=("Segoe UI", 10, "bold"))
+        btn_catalog.pack(pady=10)
+
     def run_unit_creator(self):
         self.launch(os.path.join("utilities", "CustomUnitCreator.py"))
 
@@ -48,6 +55,9 @@ class CustomFactoryMenu:
 
     def run_printer(self):
         self.launch(os.path.join("utilities", "CardPrinter.py"))
+
+    def run_catalog_editor(self):
+        self.open_catalog_editor()
 
     def launch(self, script_name):
         try:
@@ -195,6 +205,67 @@ class CustomFactoryMenu:
             error_msg = f"Error running {script_name}: {str(e)}"
             logging.error(error_msg, exc_info=True)
             messagebox.showerror("Fehler", f"Fehler beim Starten von {script_name}:\n\n{str(e)}\n\nSiehe Log für Details.")
+
+    def open_catalog_editor(self):
+        """Öffne einen einfachen Editor für catalog.json"""
+        import json
+        from tkinter import filedialog, scrolledtext
+        
+        try:
+            # Versuche catalog.json zu laden
+            catalog_path = "catalog.json"
+            if not os.path.exists(catalog_path):
+                catalog_path = os.path.join("..", "catalog.json")
+                if not os.path.exists(catalog_path):
+                    messagebox.showerror("Fehler", "catalog.json nicht gefunden!")
+                    return
+            
+            with open(catalog_path, "r", encoding="utf-8") as f:
+                catalog_data = f.read()
+            
+            # Neues Fenster für Editor
+            editor_window = tk.Toplevel(self.root)
+            editor_window.title("Catalog.json Editor")
+            editor_window.geometry("800x600")
+            
+            # Textbereich mit Scrollbar
+            text_area = scrolledtext.ScrolledText(editor_window, wrap=tk.WORD, font=("Consolas", 10))
+            text_area.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+            text_area.insert("1.0", catalog_data)
+            
+            # Button Frame
+            btn_frame = tk.Frame(editor_window)
+            btn_frame.pack(fill=tk.X, padx=10, pady=5)
+            
+            def save_catalog():
+                try:
+                    content = text_area.get("1.0", tk.END).strip()
+                    # Validiere JSON
+                    json.loads(content)
+                    # Speichere
+                    with open(catalog_path, "w", encoding="utf-8") as f:
+                        f.write(content)
+                    messagebox.showinfo("Erfolg", "catalog.json erfolgreich gespeichert!")
+                except json.JSONDecodeError as e:
+                    messagebox.showerror("JSON Fehler", f"Ungültiges JSON Format:\n{str(e)}")
+                except Exception as e:
+                    messagebox.showerror("Fehler", f"Fehler beim Speichern:\n{str(e)}")
+            
+            def format_json():
+                try:
+                    content = text_area.get("1.0", tk.END).strip()
+                    formatted = json.dumps(json.loads(content), indent=2, ensure_ascii=False)
+                    text_area.delete("1.0", tk.END)
+                    text_area.insert("1.0", formatted)
+                except json.JSONDecodeError as e:
+                    messagebox.showerror("JSON Fehler", f"Ungültiges JSON Format:\n{str(e)}")
+            
+            tk.Button(btn_frame, text="💾 Speichern", command=save_catalog, bg="#4CAF50", fg="white").pack(side=tk.LEFT, padx=5)
+            tk.Button(btn_frame, text="🎨 Format", command=format_json, bg="#2196F3", fg="white").pack(side=tk.LEFT, padx=5)
+            tk.Button(btn_frame, text="❌ Schließen", command=editor_window.destroy, bg="#F44336", fg="white").pack(side=tk.RIGHT, padx=5)
+            
+        except Exception as e:
+            messagebox.showerror("Fehler", f"Fehler beim Öffnen des Editors:\n{str(e)}")
 
 if __name__ == "__main__":
     root = tk.Tk()

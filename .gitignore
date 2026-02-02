@@ -8,3 +8,4 @@ legion_app.log
 gemini_key.txt
 /build/Win/build/*
 /dist/SWLegion
+legion_app.log

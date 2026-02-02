@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import ttk, messagebox, filedialog
+from tkinter import ttk, messagebox, filedialog, simpledialog
 import json
 import random
 import os
@@ -102,6 +102,20 @@ class GameCompanion:
         btn_load_o = tk.Button(top_frame, text="Lade Gegner-Armee (AI)", bg="#F44336", fg="white", command=lambda: self.load_army(False))
         btn_load_o.pack(side=tk.RIGHT, padx=20)
 
+        # AI Checkbox oben
+        chk_ai = tk.Checkbutton(top_frame, text="AI Aktiv", variable=self.ai_enabled, bg="#333", fg="white", selectcolor="#555", font=("Segoe UI", 10))
+        chk_ai.pack(side=tk.RIGHT, padx=5)
+
+        # Punkte-Anzeige
+        self.score_frame = tk.Frame(top_frame, bg="#333")
+        self.score_frame.pack(side=tk.RIGHT, padx=20)
+        
+        self.player_score = 0
+        self.opponent_score = 0
+        self.lbl_score = tk.Label(self.score_frame, text="Spieler: 0 | Gegner: 0", 
+                                 font=("Segoe UI", 12, "bold"), fg="yellow", bg="#333")
+        self.lbl_score.pack()
+
         # Haupt-Container
         self.paned = tk.PanedWindow(self.root, orient=tk.HORIZONTAL)
         self.paned.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
@@ -129,22 +143,6 @@ class GameCompanion:
         self.paned.add(self.frame_opponent)
         tk.Label(self.frame_opponent, text="Gegner Armee (AI)", font=("Segoe UI", 12, "bold"), bg="#ffcdd2", pady=5).pack(fill="x")
         self.tree_opponent = self.create_unit_tree(self.frame_opponent)
-        
-        # AI aktiviert Checkbox und Test-Buttons
-        controls_frame = tk.Frame(self.frame_opponent)
-        controls_frame.pack(pady=5)
-        
-        self.ai_enabled = tk.BooleanVar(value=True)
-        chk_ai = tk.Checkbutton(controls_frame, text="AI Aktiv", variable=self.ai_enabled)
-        chk_ai.pack(side=tk.LEFT, padx=5)
-        
-        # TEST: Add marker test buttons
-        tk.Button(controls_frame, text="🎯 Test Marker", 
-                 command=self.test_add_markers, bg="#FF9800", fg="white", 
-                 font=("Segoe UI", 9)).pack(side=tk.LEFT, padx=2)
-        tk.Button(controls_frame, text="🧹 Reset Marker", 
-                 command=self.test_reset_markers, bg="#607D8B", fg="white", 
-                 font=("Segoe UI", 9)).pack(side=tk.LEFT, padx=2)
 
     def create_unit_tree(self, parent):
         cols = ("Name", "Minis", "HP", "Status")
@@ -219,7 +217,7 @@ class GameCompanion:
                 self.update_tree(self.tree_player, self.player_army["units"])
                 logging.info(f"Player army loaded: {faction} ({len(enriched_units)} units)")
             else:
-                self.opponent_army = {"faction": faction, "units": enriched_units}
+                self.opponent_army = {"faction": faction, "units": enriched_units, "command_cards": command_cards}
                 self.update_tree(self.tree_opponent, self.opponent_army["units"])
                 logging.info(f"Opponent army loaded: {faction} ({len(enriched_units)} units)")
 
@@ -256,11 +254,37 @@ class GameCompanion:
             if u.get("standby", False):
                 markers.append("⏸️")
             
+            # PANIC-Zustand anzeigen
+            panic_state = u.get("panic_state", "")
+            if panic_state == "retreat":
+                markers.append("🏃 RÜCKZUG")
+            elif panic_state == "suppressed":
+                markers.append("😰 UNTERDRÜCKT")
+            
+            # Courage vs Suppression Check
+            try:
+                courage_value = u.get("courage", 1)
+                if courage_value == "-" or courage_value == "" or courage_value is None:
+                    courage = 1
+                else:
+                    courage = int(courage_value)
+                suppression = int(u.get("suppression", 0))
+                if suppression >= courage and not panic_state:
+                    markers.append("💀 PANIC!")
+            except (ValueError, TypeError):
+                # Fallback wenn Courage nicht als Zahl verfügbar
+                pass
+            
             if markers:
                 status += f" {' '.join(markers)}"
             
             minis = u.get("minis", 1)
-            tree.insert("", "end", values=(u["name"], minis, f"{u['current_hp']}/{u['hp']}", status))
+            # Zeige eliminated Status
+            if minis <= 0:
+                status = "💀 ELIMINATED"
+                tree.insert("", "end", values=(f"❌ {u['name']}", 0, "0/0", status))
+            else:
+                tree.insert("", "end", values=(u["name"], minis, f"{u['current_hp']}/{u['hp']}", status))
 
     def init_game(self):
         if not self.player_army["units"] and not self.opponent_army["units"]:
@@ -550,6 +574,15 @@ class GameCompanion:
 
     def generate_ai_deck(self):
         faction = self.opponent_army["faction"]
+        
+        # Versuche zuerst gespeicherte Command Cards zu laden
+        if self.opponent_army.get("command_cards"):
+            self.opponent_hand = self.opponent_army["command_cards"].copy()
+            self.opponent_discard = []
+            logging.info(f"Loaded opponent command cards from army file: {len(self.opponent_hand)} cards")
+            return
+            
+        # Fallback: AI-Deck generieren
         all_cards = self.db.get_command_cards(faction)
 
         # Simple Logic: Try to fulfill 2/2/2/1 requirement
@@ -624,11 +657,18 @@ class GameCompanion:
         # Get objects
         p_card = next(c for c in self.player_hand if c["name"] == p_card_name)
 
-        # AI Select
-        if self.opponent_hand:
-            o_card = random.choice(self.opponent_hand)
+        # Opponent Karte wählen
+        if self.ai_enabled.get():
+            # AI Select
+            if self.opponent_hand:
+                o_card = random.choice(self.opponent_hand)
+            else:
+                o_card = {"name": "Standing Orders", "pips": 4, "text": "-"}
         else:
-            o_card = {"name": "Standing Orders", "pips": 4, "text": "-"}
+            # Manueller Opponent - Karte wählen lassen
+            o_card = self.select_opponent_command_card()
+            if not o_card:
+                return
 
         # Move to discard
         self.player_hand.remove(p_card)
@@ -691,6 +731,47 @@ class GameCompanion:
 
         tk.Button(self.frame_center, text="Befehle erteilen >", command=self.issue_orders_ui, bg="#FF9800", fg="white", font=("Segoe UI", 12)).pack(pady=10)
 
+    def select_opponent_command_card(self):
+        """Lasse Spieler 2 eine Kommandokarte auswählen"""
+        if not self.opponent_hand:
+            return {"name": "Standing Orders", "pips": 4, "text": "-"}
+        
+        # Dialog für Kartenwahl
+        card_dialog = tk.Toplevel(self.root)
+        card_dialog.title("Spieler 2 - Kommandokarte wählen")
+        card_dialog.geometry("400x500")
+        card_dialog.transient(self.root)
+        card_dialog.grab_set()
+        
+        selected_card = [None]  # Mutable container for result
+        
+        tk.Label(card_dialog, text="Spieler 2: Wähle deine Kommandokarte", 
+                font=("Segoe UI", 14, "bold")).pack(pady=10)
+        
+        var_opponent_card = tk.StringVar()
+        
+        for card in self.opponent_hand:
+            btn = tk.Radiobutton(card_dialog, 
+                text=f"{card['name']} ({card['pips']}•)\\n{card.get('text', '')[:50]}...",
+                variable=var_opponent_card, value=card["name"],
+                indicatoron=1, wraplength=350, justify="left")
+            btn.pack(pady=5, padx=20, anchor="w")
+        
+        def confirm_selection():
+            card_name = var_opponent_card.get()
+            if not card_name:
+                messagebox.showwarning("Auswahl", "Bitte wähle eine Karte!")
+                return
+            selected_card[0] = next(c for c in self.opponent_hand if c["name"] == card_name)
+            card_dialog.destroy()
+        
+        tk.Button(card_dialog, text="Karte bestätigen", command=confirm_selection,
+                 bg="#4CAF50", fg="white", font=("Segoe UI", 12)).pack(pady=20)
+        
+        # Wait for dialog to close
+        card_dialog.wait_window()
+        return selected_card[0]
+
     def issue_orders_ui(self):
         for widget in self.frame_center.winfo_children(): widget.destroy()
 
@@ -735,22 +816,77 @@ class GameCompanion:
                 item["unit"]["order_token"] = True
                 count += 1
 
-        # 2. Apply AI Orders (Simple Logic)
-        # Based on Pips: 1->1, 2->2, 3->3, 4->1
-        pips = self.current_command_card["opponent"].get("pips", 4)
-        ai_orders_count = 3 if pips == 3 else (2 if pips == 2 else 1)
+        # 2. Apply Opponent Orders
+        if self.ai_enabled.get():
+            # AI Orders (Simple Logic)
+            pips = self.current_command_card["opponent"].get("pips", 4)
+            ai_orders_count = 3 if pips == 3 else (2 if pips == 2 else 1)
 
-        # AI prioritizes Commander/Operative then Heavy then Special then Corps
-        ai_units = [u for u in self.opponent_army["units"] if u["current_hp"] > 0]
-        # Sort by rank priority (Commander=1...)
-        rank_prio = {"Commander": 1, "Operative": 1, "Heavy": 2, "Special Forces": 3, "Support": 4, "Corps": 5}
-        ai_units.sort(key=lambda x: rank_prio.get(x.get("rank"), 99))
+            # AI prioritizes Commander/Operative then Heavy then Special then Corps
+            ai_units = [u for u in self.opponent_army["units"] if u["current_hp"] > 0]
+            # Sort by rank priority (Commander=1...)
+            rank_prio = {"Commander": 1, "Operative": 1, "Heavy": 2, "Special Forces": 3, "Support": 4, "Corps": 5}
+            ai_units.sort(key=lambda x: rank_prio.get(x.get("rank"), 99))
 
-        for i in range(min(len(ai_units), ai_orders_count)):
-            ai_units[i]["order_token"] = True
+            for i in range(min(len(ai_units), ai_orders_count)):
+                ai_units[i]["order_token"] = True
+        else:
+            # Manueller Opponent - Befehle wählen lassen
+            self.select_opponent_orders()
 
         self.create_order_pool()
         self.start_activation_phase()
+
+    def select_opponent_orders(self):
+        """Lasse Spieler 2 seine Befehle auswählen"""
+        pips = self.current_command_card["opponent"].get("pips", 4)
+        orders_count = 3 if pips == 3 else (2 if pips == 2 else 1)
+        
+        # Dialog für Befehlswahl
+        order_dialog = tk.Toplevel(self.root)
+        order_dialog.title("Spieler 2 - Befehle erteilen")
+        order_dialog.geometry("500x600")
+        order_dialog.transient(self.root)
+        order_dialog.grab_set()
+        
+        tk.Label(order_dialog, text=f"Spieler 2: Wähle {orders_count} Einheit(en) für Befehle", 
+                font=("Segoe UI", 14, "bold")).pack(pady=10)
+        
+        tk.Label(order_dialog, text=f"Kommandokarte: {self.current_command_card['opponent']['name']} ({pips}•)", 
+                font=("Segoe UI", 12), fg="blue").pack(pady=5)
+        
+        # Checkbox-Liste für Opponent-Einheiten
+        opponent_order_vars = []
+        available_units = [u for u in self.opponent_army["units"] if u["current_hp"] > 0]
+        
+        for unit in available_units:
+            var = tk.BooleanVar()
+            chk = tk.Checkbutton(order_dialog, 
+                text=f"{unit['name']} ({unit.get('rank', 'Unknown')})",
+                variable=var, font=("Segoe UI", 11))
+            chk.pack(anchor="w", padx=20, pady=2)
+            opponent_order_vars.append({"var": var, "unit": unit})
+        
+        def confirm_orders():
+            selected = [item for item in opponent_order_vars if item["var"].get()]
+            if len(selected) > orders_count:
+                messagebox.showwarning("Zu viele Befehle", f"Du kannst nur {orders_count} Befehl(e) erteilen!")
+                return
+            elif len(selected) == 0:
+                messagebox.showwarning("Keine Befehle", "Du musst mindestens einen Befehl erteilen!")
+                return
+            
+            # Befehle anwenden
+            for item in selected:
+                item["unit"]["order_token"] = True
+                
+            order_dialog.destroy()
+        
+        tk.Button(order_dialog, text="Befehle bestätigen", command=confirm_orders,
+                 bg="#4CAF50", fg="white", font=("Segoe UI", 12)).pack(pady=20)
+        
+        # Wait for dialog to close
+        order_dialog.wait_window()
 
     def create_order_pool(self):
         self.order_pool = []
@@ -958,24 +1094,37 @@ class GameCompanion:
 
         # Check Panic
         self.is_panicked = False
-        if courage != "-":
-            try:
+        try:
+            if courage == "-" or courage == "" or courage is None:
+                c_val = 1
+            else:
                 c_val = int(courage)
-                if unit["suppression"] >= 2 * c_val:
-                    self.is_panicked = True
-            except: pass
+            if unit["suppression"] >= 2 * c_val:
+                self.is_panicked = True
+        except (ValueError, TypeError):
+            pass
 
         # Suppressed?
         self.is_suppressed = False
-        if courage != "-":
-             try:
+        try:
+            if courage == "-" or courage == "" or courage is None:
+                c_val = 1
+            else:
                 c_val = int(courage)
-                if unit["suppression"] >= c_val:
-                    self.is_suppressed = True
-                    self.actions_remaining -= 1
-             except: pass
+            if unit["suppression"] >= c_val:
+                self.is_suppressed = True
+                self.actions_remaining -= 1
+        except (ValueError, TypeError):
+            pass
 
     def update_actions_ui(self):
+        # Check if frame_center still exists and active_unit is valid
+        try:
+            if not hasattr(self, 'frame_center') or not self.frame_center.winfo_exists() or not self.active_unit:
+                return
+        except tk.TclError:
+            return
+            
         # Clear specific frame or rebuild
         # Simplified: rebuild center bottom
         # ...
@@ -1006,11 +1155,11 @@ class GameCompanion:
         f_acts = tk.Frame(self.frame_center)
         f_acts.pack(pady=10)
 
-        if (self.active_side == "Player" or (self.active_side == "Opponent" and self.ai_enabled.get())) and not self.is_panicked and self.actions_remaining > 0:
+        if (self.active_side == "Player" or (self.active_side == "Opponent" and not self.ai_enabled.get())) and not self.is_panicked and self.actions_remaining > 0:
             btn_cfg = {"font": ("Segoe UI", 10), "width": 15, "bg": "#2196F3", "fg": "white"}
 
             if self.active_side == "Opponent":
-                tk.Label(f_acts, text="Führe AI-Aktionen aus:", font=("Segoe UI", 12, "bold"), fg="red").grid(row=0, column=0, columnspan=2, pady=5)
+                tk.Label(f_acts, text="Manueller Opponent-Modus:", font=("Segoe UI", 12, "bold"), fg="orange").grid(row=0, column=0, columnspan=2, pady=5)
                 start_row = 1
             else:
                 start_row = 0
@@ -1026,12 +1175,13 @@ class GameCompanion:
             tk.Button(f_acts, text="Einheit Passen", command=self.pass_current_unit, bg="#FF9800", fg="white", font=("bold")).grid(row=start_row+3, column=0, padx=5, pady=5)
             tk.Button(f_acts, text="Aktivierung Beenden", command=self.end_activation, bg="#F44336", fg="white", font=("bold")).grid(row=start_row+3, column=1, padx=5, pady=5)
 
-        elif (self.active_side == "Player" or (self.active_side == "Opponent" and self.ai_enabled.get())) and (self.is_panicked or self.actions_remaining <= 0):
+        elif (self.active_side == "Player" or (self.active_side == "Opponent" and not self.ai_enabled.get())) and (self.is_panicked or self.actions_remaining <= 0):
              tk.Button(f_acts, text="Einheit Passen", command=self.pass_current_unit, bg="#FF9800", fg="white", font=("bold")).pack(pady=5)
              tk.Button(f_acts, text="Aktivierung Beenden", command=self.end_activation, bg="#F44336", fg="white", font=("bold")).pack()
 
     def perform_action(self, action_type):
-        if self.actions_remaining <= 0: return
+        if self.actions_remaining <= 0 or not self.active_unit: 
+            return
 
         # Reduce actions immediately (except Attack which might cancel?)
         # For simplicity, reduce now.
@@ -1052,11 +1202,40 @@ class GameCompanion:
             self.active_unit["dodge"] = self.active_unit.get("dodge", 0) + 1
             messagebox.showinfo("Ausweichen", f"{self.active_unit['name']} erhält 1 Ausweichmarker.\nGesamt: 💨{self.active_unit['dodge']}")
         elif action_type == "Standby":
+            # Bereitschafts-Mechanik: Einheit kann später reagieren
             self.active_unit["standby"] = True
+            self.active_unit["dodge"] = self.active_unit.get("dodge", 0) + 1  # Gratis Dodge
+            messagebox.showinfo("Bereitschaft", f"{self.active_unit['name']} geht in Bereitschaft!\n\n🛡️ Effekte:\n• Erhält 💨 Dodge-Marker\n• Kann außerhalb der Aktivierung reagieren\n• ⏸️ Bereitschaftsmarker bis zur nächsten Aktion")
         elif action_type == "Recover":
-            self.active_unit["suppression"] = 0
-            # Ready cards...
+            # Rally-Mechanik: Erholung von Suppression
+            old_suppression = self.active_unit.get("suppression", 0)
+            if old_suppression > 0:
+                # Entferne 2 Suppression (oder alle wenn weniger als 2)
+                removed = min(old_suppression, 2)
+                self.active_unit["suppression"] = old_suppression - removed
+                
+                # Panic-Zustand zurücksetzen wenn Suppression unter Courage fällt
+                try:
+                    courage_value = self.active_unit.get("courage", 1)
+                    if courage_value == "-" or courage_value == "" or courage_value is None:
+                        courage = 1
+                    else:
+                        courage = int(courage_value)
+                    if self.active_unit["suppression"] < courage:
+                        self.active_unit.pop("panic_state", None)
+                except (ValueError, TypeError):
+                    pass
+                    
+                messagebox.showinfo("Erholung", f"{self.active_unit['name']} erholt sich!\n\n🛡️ Rally-Effekte:\n• -{removed} 📉 Suppression\n• Gesamt: {self.active_unit['suppression']}\n• Panic-Zustand zurückgesetzt")
+            else:
+                # Keine Suppression: Erhält Aim-Marker
+                self.active_unit["aim"] = self.active_unit.get("aim", 0) + 1
+                messagebox.showinfo("Erholung", f"{self.active_unit['name']} fokussiert sich!\n\n🛡️ Rally ohne Suppression:\n• +1 🎯 Ziel-Marker\n• Gesamt: {self.active_unit['aim']}")
 
+        # Standby-Marker entfernen nach jeder Aktion (außer Standby selbst)
+        if action_type != "Standby" and self.active_unit and self.active_unit.get("standby", False):
+            self.active_unit.pop("standby", None)
+        
         # Decrement is handled by dialog callback for Move/Attack
         if action_type not in ["Move", "Attack"]:
             self.actions_remaining -= 1
@@ -1079,7 +1258,11 @@ class GameCompanion:
         if self.is_panicked:
             # Remove suppression = courage
             try:
-                val = int(self.active_unit["courage"])
+                courage_value = self.active_unit.get("courage", 1)
+                if courage_value == "-" or courage_value == "" or courage_value is None:
+                    val = 1
+                else:
+                    val = int(courage_value)
                 self.active_unit["suppression"] = max(0, self.active_unit["suppression"] - val)
             except: pass
 
@@ -1089,6 +1272,9 @@ class GameCompanion:
             logging.info(f"Unit {self.active_unit['name']} finished activation")
             # Update tree to show new status
             self.update_trees()
+        
+        # Prüfe Bereitschafts-Reaktionen bevor der nächste Zug beginnt
+        self.check_standby_reactions()
         
         # Continue with next player's turn
         self.check_and_continue_turn()
@@ -1453,62 +1639,10 @@ class GameCompanion:
             self.update_tree(self.tree_player, self.player_army["units"])
         if self.opponent_army["units"]:
             self.update_tree(self.tree_opponent, self.opponent_army["units"])
-    
-    def test_add_markers(self):
-        """TEST: Add sample markers to first units for testing"""
-        if self.player_army["units"]:
-            unit = self.player_army["units"][0]
-            unit["aim"] = unit.get("aim", 0) + 2
-            unit["dodge"] = unit.get("dodge", 0) + 1
-            unit["suppression"] = unit.get("suppression", 0) + 1
-            
-        if self.opponent_army["units"]:
-            unit = self.opponent_army["units"][0]
-            unit["aim"] = unit.get("aim", 0) + 1
-            unit["dodge"] = unit.get("dodge", 0) + 2
-            
-        self.update_trees()
-        messagebox.showinfo("Test", "Marker zu ersten Einheiten hinzugefügt!\nSiehe Listen für 🎯💨📉")
-    
-    def test_reset_markers(self):
-        """TEST: Reset all markers"""
-        for army in [self.player_army, self.opponent_army]:
-            for unit in army.get("units", []):
-                unit.pop("aim", None)
-                unit.pop("dodge", None) 
-                unit.pop("suppression", None)
-                unit.pop("standby", None)
-        
-        self.update_trees()
-        messagebox.showinfo("Test", "Alle Marker zurückgesetzt!")
-    
-    def test_add_markers(self):
-        """TEST: Add sample markers to first units for testing"""
-        if self.player_army["units"]:
-            unit = self.player_army["units"][0]
-            unit["aim"] = unit.get("aim", 0) + 2
-            unit["dodge"] = unit.get("dodge", 0) + 1
-            unit["suppression"] = unit.get("suppression", 0) + 1
-            
-        if self.opponent_army["units"]:
-            unit = self.opponent_army["units"][0]
-            unit["aim"] = unit.get("aim", 0) + 1
-            unit["dodge"] = unit.get("dodge", 0) + 2
-            
-        self.update_trees()
-        messagebox.showinfo("Test", "Marker zu ersten Einheiten hinzugefügt!\nSiehe Listen für 🎯💨📉")
-    
-    def test_reset_markers(self):
-        """TEST: Reset all markers"""
-        for army in [self.player_army, self.opponent_army]:
-            for unit in army.get("units", []):
-                unit.pop("aim", None)
-                unit.pop("dodge", None) 
-                unit.pop("suppression", None)
-                unit.pop("standby", None)
-        
-        self.update_trees()
-        messagebox.showinfo("Test", "Alle Marker zurückgesetzt!")
+
+    def update_score_display(self):
+        """Aktualisiere die Punkteanzeige"""
+        self.lbl_score.config(text=f"Spieler: {self.player_score} | Gegner: {self.opponent_score}")
 
     def open_attack_dialog(self, pre_target=None, pre_weapon=None):
         if not self.active_unit: return
@@ -1636,13 +1770,25 @@ class GameCompanion:
 
         # LOGIK
         def roll_attack():
-            # 1. Pool bilden
+            # 1. Pool bilden - KORREKTUR: Für jede Miniatur im Trupp
             pool = {"red": 0, "black": 0, "white": 0}
             selected_weapons = [w for w in weapon_vars if w["var"].get()]
 
             if not selected_weapons:
                 messagebox.showwarning("Fehler", "Keine Waffe gewählt!")
                 return
+
+            # Miniaturenanzahl des angreifenden Trupps
+            current_minis = unit.get("current_minis", unit.get("minis", 1))
+            log_text = f"Angreifender Trupp: {unit['name']} ({current_minis} Miniaturen)\n"
+            
+            # Prüfe Panic-Zustand der angreifenden Einheit
+            panic_state = unit.get("panic_state", "")
+            if panic_state == "retreat":
+                messagebox.showwarning("Panic", f"{unit['name']} ist im Rückzug und kann nicht angreifen!")
+                return
+            elif panic_state == "suppressed":
+                log_text += "⚠️ Einheit ist unterdrückt - reduzierte Effektivität\n"
 
             # Keywords sammeln
             kw_map = {}
@@ -1659,11 +1805,12 @@ class GameCompanion:
                     except: pass
                 kw_map[name] = kw_map.get(name, 0) + val
 
-            # Weapon Keywords
+            # Weapon Keywords und Pool pro Miniatur
             for w in selected_weapons:
                 wd = w["data"]
+                # Würfel für jede Miniatur im Trupp hinzufügen
                 for color, count in wd["dice"].items():
-                    pool[color] += count
+                    pool[color] += count * current_minis  # KORREKTUR: Multipliziere mit Miniaturenanzahl
                 for k in wd.get("keywords", []):
                     k=k.strip()
                     if not k: continue
@@ -1674,6 +1821,13 @@ class GameCompanion:
                         try: val = int(parts[1])
                         except: pass
                     kw_map[name] = kw_map.get(name, 0) + val
+
+            log_text += f"Basis-Würfelpool: {pool}\n"
+            
+            # SUPPRESSION-EFFEKTE auf Angreifer anwenden
+            pool, suppression_log = self.apply_suppression_to_pool(pool, unit)
+            if suppression_log:
+                log_text += suppression_log
 
             # WÜRFELN (Angriff)
             results = {"crit": 0, "hit": 0, "surge": 0, "blank": 0}
@@ -1701,7 +1855,7 @@ class GameCompanion:
                 for _ in range(count):
                     results[roll_legion_atk(color)] += 1
 
-            log_text = f"Wurf: {results}\n"
+            log_text += f"Wurfergebnis: {results}\n"
 
             # --- KEYWORD LOGIC ---
 
@@ -1871,26 +2025,105 @@ class GameCompanion:
             else:
                 wounds = 0
 
-            # SUPPRESSION
+            # SUPPRESSION - Erweiterte Mechanik
             suppr_val = 0
-            # Standard: If at least 1 Hit/Crit result
+            # Standard: Wenn mindestens 1 Hit/Crit Ergebnis nach Verteidigung
             if total_hits > 0:
                 suppr_val += 1
 
-            # Keyword: Suppressive
-            if kw_map.get("Suppressive", 0) > 0 or kw_map.get("Niederhaltend", 0) > 0:
-                suppr_val += 1
+            # Keyword: Suppressive - Gibt +1 Suppression auch bei 0 Schaden
+            suppressive_val = kw_map.get("Suppressive", 0) + kw_map.get("Niederhaltend", 0)
+            if suppressive_val > 0:
+                suppr_val += suppressive_val
+                
+            # Minimum 1 Suppression wenn Suppressive Waffe verwendet wurde
+            if suppressive_val > 0 and suppr_val == 0:
+                suppr_val = 1
 
             if suppr_val > 0:
-                log_text += f"\nNiederhalten: +{suppr_val}"
+                log_text += f"\n📉 Niederhalten: +{suppr_val}"
+                if suppressive_val > 0:
+                    log_text += f" (inkl. Niederhaltend {suppressive_val})"
 
             lbl_log.config(text=log_text, fg="red" if wounds > 0 else ("orange" if suppr_val > 0 else "green"))
 
             # Apply Button
             if target_unit and (wounds > 0 or suppr_val > 0):
                 def apply_result():
+                    eliminated_points = 0
+                    
                     if wounds > 0:
-                        target_unit["current_hp"] -= wounds
+                        remaining_damage = wounds
+                        current_hp = target_unit["current_hp"]
+                        max_hp = target_unit["hp"]
+                        current_minis = target_unit.get("minis", 1)
+                        
+                        # Berechne Figuren-Verluste durch Überschaden
+                        figures_lost = 0
+                        
+                        while remaining_damage > 0 and current_minis > 0:
+                            if remaining_damage >= current_hp:
+                                # Aktuelle Figur stirbt
+                                remaining_damage -= current_hp
+                                figures_lost += 1
+                                current_minis -= 1
+                                current_hp = max_hp  # Nächste Figur hat volle HP
+                            else:
+                                # Aktuelle Figur überlebt mit reduzierter HP
+                                current_hp -= remaining_damage
+                                remaining_damage = 0
+                        
+                        # Update Einheit
+                        target_unit["minis"] = current_minis
+                        target_unit["current_hp"] = current_hp
+                        
+                        # Punkte berechnen wenn Figuren sterben
+                        if figures_lost > 0:
+                            # Versuche verschiedene Möglichkeiten für Einheitskosten
+                            unit_cost = target_unit.get("cost", 0)
+                            if unit_cost == 0:
+                                unit_cost = target_unit.get("points", 0)
+                            if unit_cost == 0:
+                                unit_cost = target_unit.get("pts", 0)
+                            if unit_cost == 0:
+                                # Fallback: Schätzung basierend auf Rang
+                                rank = target_unit.get("rank", "Corps")
+                                cost_estimates = {
+                                    "Commander": 200, "Operative": 150, 
+                                    "Corps": 60, "Special Forces": 80, 
+                                    "Support": 40, "Heavy": 200
+                                }
+                                unit_cost = cost_estimates.get(rank, 60)
+                            
+                            original_minis = target_unit.get("original_minis", target_unit.get("minis", 1) + figures_lost)
+                            target_unit["original_minis"] = original_minis  # Speichere Original für Punkteberechnung
+                            points_per_figure = unit_cost / original_minis if original_minis > 0 else 0
+                            eliminated_points = int(figures_lost * points_per_figure)
+                            
+                            # Punkte dem Angreifer gutschreiben
+                            if unit in self.player_army["units"]:
+                                # Spieler greift an, Opponent erhält Punkte
+                                self.opponent_score = getattr(self, 'opponent_score', 0) + eliminated_points
+                            else:
+                                # Opponent greift an, Spieler erhält Punkte
+                                self.player_score = getattr(self, 'player_score', 0) + eliminated_points
+                            
+                            # Aktualisiere Punkteanzeige
+                            self.update_score_display()
+                        
+                        # Meldungen
+                        if current_minis <= 0:
+                            # Einheit vollständig eliminiert - aus Liste entfernen
+                            if target_unit in self.player_army["units"]:
+                                self.player_army["units"].remove(target_unit)
+                            elif target_unit in self.opponent_army["units"]:
+                                self.opponent_army["units"].remove(target_unit)
+                            messagebox.showwarning("Truppe vernichtet!", 
+                                f"{target_unit['name']} wurde vollständig eliminiert!\n{eliminated_points} Punkte gutgeschrieben!")
+                        elif figures_lost > 0:
+                            messagebox.showinfo("Verluste!", 
+                                f"{target_unit['name']}: {figures_lost} Figur(en) eliminiert!\nVerbleibende: {current_minis}\n{eliminated_points} Punkte gutgeschrieben!")
+                        
                     if suppr_val > 0:
                         target_unit["suppression"] = target_unit.get("suppression", 0) + suppr_val
 
@@ -1905,22 +2138,192 @@ class GameCompanion:
                         # Dodge markers are consumed when used, clear them
                         target_unit["dodge"] = 0
 
+                    # PANIC TEST - Wenn Suppression >= Courage
+                    current_suppression = target_unit.get("suppression", 0)
+                    try:
+                        courage_value = target_unit.get("courage", 1)
+                        if courage_value == "-" or courage_value == "" or courage_value is None:
+                            courage = 1
+                        else:
+                            courage = int(courage_value)
+                    except (ValueError, TypeError):
+                        courage = 1  # Default fallback
+                    
+                    panic_message = ""
+                    if current_suppression >= courage:
+                        panic_message = self.perform_panic_test(target_unit)
+
                     self.update_trees()
-                    message = f"{target_unit['name']}:\n-{wounds} HP\n+{suppr_val} Suppression\nZielmarker verbraucht: {aim_used}"
+                    message = f"{target_unit['name']}:\n-{wounds} HP\n+{suppr_val} Suppression (Total: {current_suppression})\nZielmarker verbraucht: {aim_used}"
                     if dodges_available > 0:
                         message += f"\nAusweichen-Marker verbraucht: {dodges_available}"
-                    messagebox.showinfo("Update", message)
-                    on_complete() # Decrement Action
+                    if panic_message:
+                        message += f"\n\n🚨 PANIC TEST:\n{panic_message}"
+                    
+                    # Schließe Fenster SOFORT nach dem Anwenden
                     top.destroy()
+                    on_complete() # Decrement Action
+                    
+                    # Zeige Ergebnis in einem neuen, kurzem Fenster
+                    messagebox.showinfo("Angriff erfolgreich!", message)
 
                 btn_apply = tk.Button(frame_result, text="ERGEBNIS ANWENDEN", bg="red", fg="white", command=apply_result)
                 btn_apply.pack(pady=5)
-            elif self.attack_rolled:
-                 # If rolled but no damage/suppression (e.g. all misses, no Suppressive), just close
-                 def finish_no_effect():
-                     on_complete()
-                     top.destroy()
-                 tk.Button(frame_result, text="ANGRIFF BEENDEN (Kein Effekt)", command=finish_no_effect, bg="#ccc").pack(pady=5)
+
+        btn_roll = tk.Button(frame_result, text="⚂ WÜRFELN", bg="#4CAF50", fg="white", command=roll_attack, font=("Segoe UI", 12, "bold"))
+        btn_roll.pack(pady=5)
+
+    def perform_panic_test(self, unit):
+        """Führe einen Panic-Test durch wenn Suppression >= Courage"""
+        import random
+        
+        suppression = unit.get("suppression", 0)
+        
+        # Robuste Courage-Konvertierung
+        try:
+            courage_value = unit.get("courage", 1)
+            if courage_value == "-" or courage_value == "" or courage_value is None:
+                courage = 1  # Standard-Fallback
+            else:
+                courage = int(courage_value)
+        except (ValueError, TypeError):
+            courage = 1  # Fallback bei ungültigen Werten
+            
+        panic_dice = suppression - courage
+        
+        # Würfle Panic-Würfel (weiße Würfel)
+        results = []
+        for _ in range(panic_dice):
+            roll = random.randint(1, 6)
+            if roll == 1:
+                results.append("blank")
+            else:
+                results.append("success")
+        
+        panic_count = results.count("blank")
+        message = f"Mut: {courage}, Niederhalten: {suppression}\n"
+        message += f"Panic-Würfel: {panic_dice} ({results.count('blank')} blanks)\n\n"
+        
+        if panic_count == 0:
+            message += "✅ KEIN PANIC - Einheit hält Stand!"
+            return message
+        
+        # Panic-Effekte je nach Anzahl der blanks
+        if panic_count >= 2:
+            # Schwere Panik: Rückzug
+            message += "🔥 SCHWERE PANIK (2+ blanks):\n"
+            message += "• Einheit muss sich zurückziehen\n"
+            message += "• Verliert alle Marker außer Suppression\n"
+            message += "• Kann diese Runde nicht mehr aktivieren"
+            
+            # Entferne alle Marker außer Suppression
+            unit["aim"] = 0
+            unit["dodge"] = 0
+            unit["standby"] = 0
+            unit["panic_state"] = "retreat"  # Zustand für AI/UI
+            
+        else:
+            # Leichte Panik: Suppression bleibt
+            message += "⚠️ LEICHTE PANIK (1 blank):\n"
+            message += "• Einheit ist unterdrückt\n"
+            message += "• Verliert 1 Aktion diese Runde\n"
+            message += "• Kann nicht zielen"
+            
+            # Entferne alle Aim-Marker
+            unit["aim"] = 0
+            unit["panic_state"] = "suppressed"  # Zustand für AI/UI
+        
+        return message
+    
+    def check_suppression_effects(self, unit):
+        """Prüfe Suppression-Effekte auf Würfelpool"""
+        suppression = unit.get("suppression", 0)
+        if suppression == 0:
+            return 0
+            
+        # Für jedes Suppression-Token: -1 Angriffswürfel
+        return min(suppression, 2)  # Maximum 2 Würfel Reduktion
+    
+    def apply_suppression_to_pool(self, pool, unit):
+        """Reduziere Würfelpool basierend auf Suppression"""
+        reduction = self.check_suppression_effects(unit)
+        if reduction == 0:
+            return pool, ""
+            
+        # Reduziere Würfel (Priorität: weiß -> schwarz -> rot)
+        original_total = sum(pool.values())
+        log = f"🚫 Suppression-Effekt: -{reduction} Würfel\n"
+        
+        for color in ["white", "black", "red"]:
+            while reduction > 0 and pool[color] > 0:
+                pool[color] -= 1
+                reduction -= 1
+                
+        new_total = sum(pool.values())
+        if new_total < original_total:
+            log += f"Würfelpool reduziert: {original_total} → {new_total}\n"
+            
+        return pool, log
+
+    def check_standby_reactions(self):
+        """Prüfe ob Bereitschafts-Reaktionen möglich sind"""
+        # Finde alle Einheiten mit Bereitschafts-Marker
+        standby_units = []
+        
+        for side in ["Player", "Opponent"]:
+            if side == "Player":
+                army = self.player_army["units"]
+            else:
+                army = self.opponent_army["units"]
+                
+            for unit in army:
+                if unit.get("standby", False) and unit.get("current_hp", 0) > 0:
+                    standby_units.append((side, unit))
+        
+        if standby_units:
+            # Biete Bereitschafts-Reaktionen an
+            reaction_text = "Bereitschafts-Reaktionen verfügbar:\n\n"
+            for side, unit in standby_units:
+                reaction_text += f"🛡️ {side}: {unit['name']}\n"
+            reaction_text += "\nMöchtest du eine Bereitschafts-Reaktion durchführen?"
+            
+            if messagebox.askyesno("Bereitschaft", reaction_text):
+                self.handle_standby_reaction(standby_units)
+    
+    def handle_standby_reaction(self, standby_units):
+        """Handle Bereitschafts-Reaktion"""
+        if len(standby_units) == 1:
+            side, unit = standby_units[0]
+        else:
+            # Mehrere Einheiten - Spieler wählt
+            choices = [f"{side}: {unit['name']}" for side, unit in standby_units]
+            choice = tk.simpledialog.askstring("Bereitschafts-Reaktion", 
+                f"Wähle reagierende Einheit:\n{chr(10).join(f'{i+1}. {c}' for i, c in enumerate(choices))}\n\nEingabe (1-{len(choices)}):")
+            
+            try:
+                idx = int(choice) - 1
+                side, unit = standby_units[idx]
+            except (ValueError, IndexError, TypeError):
+                return
+        
+        # Bereitschafts-Marker entfernen
+        unit.pop("standby", None)
+        
+        # Temporäre Aktivierung für Bereitschafts-Reaktion
+        old_active_side = self.active_side
+        old_active_unit = self.active_unit
+        
+        self.active_side = side
+        self.active_unit = unit
+        self.actions_remaining = 1  # Nur eine Aktion
+        
+        messagebox.showinfo("Bereitschafts-Reaktion", 
+            f"⏸️ {unit['name']} reagiert aus der Bereitschaft!\n\n🎯 Eine Aktion verfügbar")
+        
+        # UI aktualisieren für Reaktion
+        self.update_trees()
+
+if __name__ == "__main__":
 
         btn_roll = tk.Button(top, text="WÜRFELN", command=roll_attack, font=("Segoe UI", 12, "bold"), bg="#2196F3", fg="white")
         btn_roll.pack(pady=10)
