@@ -198,6 +198,8 @@ Bei Problemen oder Fragen:
 Dieses Projekt ist ein inoffizieller Fan-Content für Star Wars: Legion.
 Star Wars und alle verwandten Marken sind Eigentum von Lucasfilm Ltd.
 
+Star Wars, Star Wars: Legion and all related properties and text are owned by Fantasy Flight Games, Lucasfilm Ltd., and/or Disney. This a hobby and fun community app and resource and should strictly not be used for any commercial purchase.
+
 ---
 
 *Möge die Macht mit dir sein! 🌟*
