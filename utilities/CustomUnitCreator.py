@@ -3,7 +3,18 @@ from tkinter import ttk, messagebox
 import json
 import os
 import uuid
-from .LegionUtils import get_data_path
+
+# Import utilities with compatibility for both script and package modes
+try:
+    # Try relative imports first (when imported as part of utilities package)
+    from .LegionUtils import get_data_path, get_writable_path
+except ImportError:
+    try:
+        # Try package imports (when running with MainMenu)
+        from utilities.LegionUtils import get_data_path, get_writable_path
+    except ImportError:
+        # Fallback to absolute imports (when running as standalone script)
+        from LegionUtils import get_data_path, get_writable_path
 
 class CustomUnitCreator:
     def __init__(self, root):
@@ -28,8 +39,6 @@ class CustomUnitCreator:
 
     def save_data(self):
         try:
-            # Ensure directory exists
-            os.makedirs(os.path.dirname(self.custom_units_file), exist_ok=True)
             with open(self.custom_units_file, "w", encoding="utf-8") as f:
                 json.dump(self.units_data, f, indent=4, ensure_ascii=False)
             messagebox.showinfo("Erfolg", "Daten erfolgreich gespeichert!")

@@ -50,20 +50,40 @@ jobs:
         
     - name: Build executable with PyInstaller
       run: |
-        cd build\Win
-        python -m PyInstaller --clean --noconfirm SWLegion.spec
+        # Use GitHub-compatible spec file from root directory
+        if (!(Test-Path "SWLegion_GitHub.spec")) {
+          Write-Host "❌ SWLegion_GitHub.spec not found in root directory"
+          throw "GitHub Actions spec file missing"
+        }
+        
+        Write-Host "✅ Building from root directory using SWLegion_GitHub.spec"
+        python -m PyInstaller --clean --noconfirm SWLegion_GitHub.spec
         
     - name: Verify PyInstaller build
       run: |
-        if (!(Test-Path "build\Win\dist\SWLegion\SWLegion.exe")) {
-          throw "❌ PyInstaller build failed - SWLegion.exe not found"
+        # PyInstaller output should be in dist\SWLegion\ when running from root
+        $exePath = "dist\SWLegion\SWLegion.exe"
+        
+        if (!(Test-Path $exePath)) {
+          Write-Host "❌ PyInstaller build failed - SWLegion.exe not found at $exePath"
+          # List what was actually created for debugging
+          Write-Host "Contents of dist directory:"
+          if (Test-Path "dist") {
+            Get-ChildItem "dist" -Recurse | ForEach-Object { Write-Host "  $($_.FullName)" }
+          } else {
+            Write-Host "  dist directory not found"
+          }
+          throw "PyInstaller build failed"
         }
-        Write-Host "✅ PyInstaller build successful"
+        
+        Write-Host "✅ PyInstaller build successful: $exePath"
+        
+        # Prepare for installer - copy to standardized location
+        if (Test-Path "pyinstaller_dist") { Remove-Item -Recurse -Force "pyinstaller_dist" }
+        Copy-Item "dist\SWLegion" -Destination "pyinstaller_dist" -Recurse
         
     - name: Create Windows installer with Inno Setup
       run: |
-        cd build\Win
-        
         # Verify Inno Setup is available
         $iscc = Get-Command "iscc.exe" -ErrorAction SilentlyContinue
         if (-not $iscc) {
@@ -76,29 +96,29 @@ jobs:
           }
         }
         
-        # Compile installer
-        iscc.exe "SWLegion_Setup.iss"
+        # Compile installer using the GitHub-specific .iss file
+        iscc.exe "SWLegion_GitHub_Setup.iss"
         
         # Verify installer was created
-        if (!(Test-Path "InstallerSetup\SWLegion_Installer.exe")) {
+        if (!(Test-Path "installer_output\SWLegion_Installer.exe")) {
           throw "❌ Installer creation failed"
         }
         
-        $installer = Get-Item "InstallerSetup\SWLegion_Installer.exe"
+        $installer = Get-Item "installer_output\SWLegion_Installer.exe"
         Write-Host "✅ Installer created: $($installer.Name) ($([math]::Round($installer.Length / 1MB, 1)) MB)"
         
     - name: Upload installer artifact
       uses: actions/upload-artifact@v4
       with:
         name: SWLegion-Installer-${{ github.sha }}
-        path: build/Win/InstallerSetup/SWLegion_Installer.exe
+        path: installer_output/SWLegion_Installer.exe
         retention-days: 90
         
     - name: Upload portable build
       uses: actions/upload-artifact@v4
       with:
         name: SWLegion-Portable-${{ github.sha }}
-        path: build/Win/dist/SWLegion/
+        path: pyinstaller_dist/
         retention-days: 30
         
   release:
@@ -116,21 +136,37 @@ jobs:
         name: SWLegion-Installer-${{ github.sha }}
         path: ./release
         
+    - name: Download portable build
+      uses: actions/download-artifact@v4
+      with:
+        name: SWLegion-Portable-${{ github.sha }}
+        path: ./portable
+        
+    - name: Create portable ZIP
+      run: |
+        # Create ZIP file for portable version
+        Compress-Archive -Path "./portable/*" -DestinationPath "./release/SWLegion_Portable.zip" -Force
+        Write-Host "✅ Portable ZIP created: SWLegion_Portable.zip"
+        
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v1
       with:
         files: |
           ./release/SWLegion_Installer.exe
+          ./release/SWLegion_Portable.zip
         name: Star Wars Legion Tool Suite ${{ github.ref_name }}
         body: |
           ## 🚀 Star Wars Legion Tool Suite ${{ github.ref_name }}
           
-          ### 📦 Windows Installer
+          ### 📦 Download Options
           
-          **Download & Installation:**
-          1. **Download** `SWLegion_Installer.exe`
-          2. **Run installer** and follow setup wizard
-          3. **Launch** from Start Menu or Desktop shortcut
+          **🔧 Windows Installer (Recommended)**
+          - **Download:** `SWLegion_Installer.exe` (Auto-install with Start Menu integration)
+          - **Installation:** Run installer → Follow setup wizard → Launch from Start Menu
+          
+          **📁 Portable Version**
+          - **Download:** `SWLegion_Portable.zip` (No installation required)
+          - **Usage:** Extract ZIP → Run `SWLegion.exe` from extracted folder
           
           ### 🎮 Features:
           - 🎯 **Army Builder** with visual marker system (🎯💨📉⏸️)
@@ -153,10 +189,10 @@ jobs:
           - Automatic Start Menu and Desktop integration
           
           ### 🛡️ Installation Notes:
-          - The installer is **digitally signed** and **virus-scanned**
+          - **Installer:** Requires administrator rights, creates Start Menu shortcuts, includes uninstaller
+          - **Portable:** No installation needed, all files self-contained in folder
           - Windows Defender may show a warning - click "More info" → "Run anyway"
-          - Requires **administrator rights** for installation
-          - **Automatic updates** will be available in future releases
+          - Both versions include the complete database and all features
           
         draft: false
         prerelease: ${{ contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') }}

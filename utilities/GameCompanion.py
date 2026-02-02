@@ -6,17 +6,26 @@ import os
 import logging
 import sys
 
-# Add parent directory to path for imports when running as executable
-if getattr(sys, 'frozen', False):
-    # Running as PyInstaller executable
-    import sys
-    sys.path.append(os.path.dirname(sys.executable))
-    from utilities.LegionData import LegionDatabase
-    from utilities.LegionRules import LegionRules
-else:
-    # Running as Python script
-    from LegionData import LegionDatabase
-    from LegionRules import LegionRules
+# Import utilities modules with compatibility for both script and package modes
+try:
+    # Try relative imports first (when imported as part of utilities package)
+    from .LegionData import LegionDatabase
+    from .LegionRules import LegionRules
+    from .LegionUtils import get_writable_path
+    logging.info("GameCompanion: Using relative imports")
+except ImportError:
+    try:
+        # Try package imports (when running with MainMenu)
+        from utilities.LegionData import LegionDatabase
+        from utilities.LegionRules import LegionRules
+        from utilities.LegionUtils import get_writable_path
+        logging.info("GameCompanion: Using package imports")
+    except ImportError:
+        # Fallback to absolute imports (when running as standalone script)
+        from LegionData import LegionDatabase
+        from LegionRules import LegionRules
+        from LegionUtils import get_writable_path
+        logging.info("GameCompanion: Using absolute imports")
 
 from PIL import Image, ImageTk
 
@@ -93,10 +102,6 @@ class GameCompanion:
         btn_load_o = tk.Button(top_frame, text="Lade Gegner-Armee (AI)", bg="#F44336", fg="white", command=lambda: self.load_army(False))
         btn_load_o.pack(side=tk.RIGHT, padx=20)
 
-        self.ai_enabled = tk.BooleanVar(value=True)
-        chk_ai = tk.Checkbutton(top_frame, text="AI Aktiv", variable=self.ai_enabled, bg="#333", fg="white", selectcolor="#555", font=("Segoe UI", 10))
-        chk_ai.pack(side=tk.RIGHT, padx=5)
-
         # Haupt-Container
         self.paned = tk.PanedWindow(self.root, orient=tk.HORIZONTAL)
         self.paned.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
@@ -157,7 +162,7 @@ class GameCompanion:
 
     def load_army(self, is_player):
         # Determine initial directory based on mission or base folder
-        initial_dir = "Armeen"
+        initial_dir = get_writable_path("Armeen")
 
         # Try to match faction from mission
         if self.mission_data:
@@ -168,8 +173,7 @@ class GameCompanion:
                 if os.path.exists(path):
                     initial_dir = path
 
-        if not os.path.exists(initial_dir):
-            os.makedirs(initial_dir)
+        # Directory creation handled by get_writable_path
 
         file_path = filedialog.askopenfilename(initialdir=initial_dir, title="Armee laden", filetypes=[("JSON", "*.json")])
         if not file_path: return
@@ -271,8 +275,7 @@ class GameCompanion:
         self.start_setup_phase()
 
     def load_mission(self):
-        initial_dir = "Missions"
-        if not os.path.exists(initial_dir): os.makedirs(initial_dir)
+        initial_dir = get_writable_path("Missions")
 
         file_path = filedialog.askopenfilename(initialdir=initial_dir, title="Mission laden", filetypes=[("JSON", "*.json")])
         if not file_path: return

@@ -1,0 +1,21 @@
+# Star Wars Legion Game Companion & AI Simulator
+# Python Dependencies for Windows Build
+
+# Core GUI Framework (usually included with Python)
+# tkinter (built-in)
+
+# Image Processing
+Pillow>=10.0.0
+
+# HTTP Requests for AI Integration
+requests>=2.31.0
+
+# Build Tool
+pyinstaller>=6.0.0
+
+# Optional: Enhanced UI Components
+# ttkbootstrap>=1.10.0  # Uncomment for modern themes
+
+# Development Dependencies (optional)
+# pytest>=7.4.0
+# black>=23.0.0

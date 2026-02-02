@@ -92,3 +92,220 @@
 2026-02-02 13:10:17,935 - root - INFO - Launching submodule: utilities\GameCompanion.py
 2026-02-02 13:12:03,342 - root - INFO - Logging initialized.
 2026-02-02 13:30:32,168 - root - INFO - Logging initialized.
+2026-02-02 15:41:01,309 - root - INFO - Enhanced logging initialized with exception capture.
+2026-02-02 15:41:01,320 - PIL.PngImagePlugin - DEBUG - STREAM b'IHDR' 16 13
+2026-02-02 15:41:01,321 - PIL.PngImagePlugin - DEBUG - STREAM b'tEXt' 41 25
+2026-02-02 15:41:01,321 - PIL.PngImagePlugin - DEBUG - STREAM b'iTXt' 78 902
+2026-02-02 15:41:01,321 - PIL.PngImagePlugin - DEBUG - STREAM b'IDAT' 992 407023
+2026-02-02 15:41:01,408 - PIL.PngImagePlugin - DEBUG - STREAM b'IHDR' 16 13
+2026-02-02 15:41:01,408 - PIL.PngImagePlugin - DEBUG - STREAM b'tEXt' 41 25
+2026-02-02 15:41:01,408 - PIL.PngImagePlugin - DEBUG - STREAM b'iTXt' 78 902
+2026-02-02 15:41:01,408 - PIL.PngImagePlugin - DEBUG - STREAM b'IDAT' 992 407023
+2026-02-02 15:41:31,499 - root - INFO - Launching submodule: utilities\CustomFactoryMenu.py
+2026-02-02 15:41:31,499 - root - INFO - Execution mode - frozen: False, MEIPASS: False
+2026-02-02 15:41:31,499 - root - INFO - Attempting direct module import for: utilities/CustomFactoryMenu.py
+2026-02-02 15:41:31,499 - root - INFO - Importing CustomFactoryMenu module
+2026-02-02 15:41:31,499 - root - INFO - CustomFactoryMenu import successful
+2026-02-02 15:41:31,501 - root - INFO - CustomFactoryMenu instance created successfully
+2026-02-02 15:41:32,312 - root - INFO - CustomFactory launching: utilities\CustomUnitCreator.py
+2026-02-02 15:41:32,312 - root - INFO - Debug: sys.frozen = False, has _MEIPASS = False, is_exe = False
+2026-02-02 15:41:32,313 - root - INFO - Executing subprocess command: ['C:\\Users\\devil\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\python.exe', 'utilities\\CustomUnitCreator.py']
+2026-02-02 15:41:34,409 - root - INFO - CustomFactory launching: utilities\CustomUnitCreator.py
+2026-02-02 15:41:34,409 - root - INFO - Debug: sys.frozen = False, has _MEIPASS = False, is_exe = False
+2026-02-02 15:41:34,409 - root - INFO - Executing subprocess command: ['C:\\Users\\devil\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\python.exe', 'utilities\\CustomUnitCreator.py']
+2026-02-02 15:42:16,436 - root - INFO - Enhanced logging initialized with exception capture.
+2026-02-02 15:42:16,446 - PIL.PngImagePlugin - DEBUG - STREAM b'IHDR' 16 13
+2026-02-02 15:42:16,446 - PIL.PngImagePlugin - DEBUG - STREAM b'tEXt' 41 25
+2026-02-02 15:42:16,447 - PIL.PngImagePlugin - DEBUG - STREAM b'iTXt' 78 902
+2026-02-02 15:42:16,447 - PIL.PngImagePlugin - DEBUG - STREAM b'IDAT' 992 407023
+2026-02-02 15:42:16,530 - PIL.PngImagePlugin - DEBUG - STREAM b'IHDR' 16 13
+2026-02-02 15:42:16,530 - PIL.PngImagePlugin - DEBUG - STREAM b'tEXt' 41 25
+2026-02-02 15:42:16,530 - PIL.PngImagePlugin - DEBUG - STREAM b'iTXt' 78 902
+2026-02-02 15:42:16,530 - PIL.PngImagePlugin - DEBUG - STREAM b'IDAT' 992 407023
+2026-02-02 15:42:17,744 - root - INFO - Launching submodule: utilities\CustomFactoryMenu.py
+2026-02-02 15:42:17,744 - root - INFO - Execution mode - frozen: False, MEIPASS: False
+2026-02-02 15:42:17,744 - root - INFO - Attempting direct module import for: utilities/CustomFactoryMenu.py
+2026-02-02 15:42:17,744 - root - INFO - Importing CustomFactoryMenu module
+2026-02-02 15:42:17,745 - root - INFO - CustomFactoryMenu import successful
+2026-02-02 15:42:17,746 - root - INFO - CustomFactoryMenu instance created successfully
+2026-02-02 15:42:18,526 - root - INFO - CustomFactory launching: utilities\CustomUnitCreator.py
+2026-02-02 15:42:18,526 - root - INFO - Debug: sys.frozen = False, has _MEIPASS = False, is_exe = False
+2026-02-02 15:42:18,526 - root - INFO - Executing subprocess command: ['C:\\Users\\devil\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\python.exe', 'utilities\\CustomUnitCreator.py']
+2026-02-02 15:42:21,506 - root - INFO - CustomFactory launching: utilities\CustomCommandCardCreator.py
+2026-02-02 15:42:21,506 - root - INFO - Debug: sys.frozen = False, has _MEIPASS = False, is_exe = False
+2026-02-02 15:42:21,507 - root - INFO - Executing subprocess command: ['C:\\Users\\devil\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\python.exe', 'utilities\\CustomCommandCardCreator.py']
+2026-02-02 15:42:22,628 - root - INFO - CustomFactory launching: utilities\CustomUpgradeCreator.py
+2026-02-02 15:42:22,628 - root - INFO - Debug: sys.frozen = False, has _MEIPASS = False, is_exe = False
+2026-02-02 15:42:22,629 - root - INFO - Executing subprocess command: ['C:\\Users\\devil\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\python.exe', 'utilities\\CustomUpgradeCreator.py']
+2026-02-02 15:42:23,219 - root - INFO - CustomFactory launching: utilities\CustomBattleCardCreator.py
+2026-02-02 15:42:23,219 - root - INFO - Debug: sys.frozen = False, has _MEIPASS = False, is_exe = False
+2026-02-02 15:42:23,220 - root - INFO - Executing subprocess command: ['C:\\Users\\devil\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\python.exe', 'utilities\\CustomBattleCardCreator.py']
+2026-02-02 15:42:23,724 - root - INFO - CustomFactory launching: utilities\BattlefieldMapCreator.py
+2026-02-02 15:42:23,724 - root - INFO - Debug: sys.frozen = False, has _MEIPASS = False, is_exe = False
+2026-02-02 15:42:23,725 - root - INFO - Executing subprocess command: ['C:\\Users\\devil\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\python.exe', 'utilities\\BattlefieldMapCreator.py']
+2026-02-02 15:42:26,308 - root - INFO - CustomFactory launching: utilities\CardPrinter.py
+2026-02-02 15:42:26,308 - root - INFO - Debug: sys.frozen = False, has _MEIPASS = False, is_exe = False
+2026-02-02 15:42:26,309 - root - INFO - Executing subprocess command: ['C:\\Users\\devil\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\python.exe', 'utilities\\CardPrinter.py']
+2026-02-02 15:42:29,329 - root - INFO - Launching submodule: utilities\ArmeeBuilder.py
+2026-02-02 15:42:29,330 - root - INFO - Execution mode - frozen: False, MEIPASS: False
+2026-02-02 15:42:29,330 - root - INFO - Attempting direct module import for: utilities/ArmeeBuilder.py
+2026-02-02 15:42:29,330 - root - INFO - Importing ArmeeBuilder module
+2026-02-02 15:42:29,330 - root - INFO - ArmeeBuilder import successful
+2026-02-02 15:42:29,330 - root - INFO - Initializing LegionDatabase...
+2026-02-02 15:42:29,331 - root - INFO - Loading catalog.json...
+2026-02-02 15:42:29,332 - root - INFO - Loading internal legacy units...
+2026-02-02 15:42:29,332 - root - INFO - Loading custom units...
+2026-02-02 15:42:29,333 - root - INFO - Loading custom upgrades...
+2026-02-02 15:42:29,333 - root - INFO - Loading custom battle cards...
+2026-02-02 15:42:29,333 - root - INFO - ArmeeBuilder initialized.
+2026-02-02 15:42:29,510 - root - INFO - ArmeeBuilder instance created successfully
+2026-02-02 15:42:32,103 - root - INFO - Launching submodule: utilities\MissionBuilder.py
+2026-02-02 15:42:32,104 - root - INFO - Execution mode - frozen: False, MEIPASS: False
+2026-02-02 15:42:32,104 - root - INFO - Attempting direct module import for: utilities/MissionBuilder.py
+2026-02-02 15:42:32,104 - root - INFO - Importing MissionBuilder module
+2026-02-02 15:42:32,104 - root - INFO - MissionBuilder import successful
+2026-02-02 15:42:32,105 - PIL.PngImagePlugin - DEBUG - STREAM b'IHDR' 16 13
+2026-02-02 15:42:32,105 - PIL.PngImagePlugin - DEBUG - STREAM b'tEXt' 41 25
+2026-02-02 15:42:32,105 - PIL.PngImagePlugin - DEBUG - STREAM b'iTXt' 78 902
+2026-02-02 15:42:32,105 - PIL.PngImagePlugin - DEBUG - STREAM b'IDAT' 992 407023
+2026-02-02 15:42:32,173 - root - INFO - Initializing LegionDatabase...
+2026-02-02 15:42:32,174 - root - INFO - Loading catalog.json...
+2026-02-02 15:42:32,176 - root - INFO - Loading internal legacy units...
+2026-02-02 15:42:32,177 - root - INFO - Loading custom units...
+2026-02-02 15:42:32,178 - root - INFO - Loading custom upgrades...
+2026-02-02 15:42:32,178 - root - INFO - Loading custom battle cards...
+2026-02-02 15:42:32,217 - root - INFO - MissionBuilder instance created successfully
+2026-02-02 15:42:35,345 - root - INFO - Launching submodule: utilities\GameCompanion.py
+2026-02-02 15:42:35,345 - root - INFO - Execution mode - frozen: False, MEIPASS: False
+2026-02-02 15:42:35,345 - root - INFO - Attempting direct module import for: utilities/GameCompanion.py
+2026-02-02 15:42:35,345 - root - INFO - Importing GameCompanion module
+2026-02-02 15:42:35,345 - root - INFO - GameCompanion import successful
+2026-02-02 15:42:35,345 - root - INFO - Initializing LegionDatabase...
+2026-02-02 15:42:35,346 - root - INFO - Loading catalog.json...
+2026-02-02 15:42:35,347 - root - INFO - Loading internal legacy units...
+2026-02-02 15:42:35,347 - root - INFO - Loading custom units...
+2026-02-02 15:42:35,348 - root - INFO - Loading custom upgrades...
+2026-02-02 15:42:35,348 - root - INFO - Loading custom battle cards...
+2026-02-02 15:42:35,348 - root - INFO - GameCompanion initialized.
+2026-02-02 15:42:35,349 - PIL.PngImagePlugin - DEBUG - STREAM b'IHDR' 16 13
+2026-02-02 15:42:35,349 - PIL.PngImagePlugin - DEBUG - STREAM b'tEXt' 41 25
+2026-02-02 15:42:35,349 - PIL.PngImagePlugin - DEBUG - STREAM b'iTXt' 78 902
+2026-02-02 15:42:35,349 - PIL.PngImagePlugin - DEBUG - STREAM b'IDAT' 992 407023
+2026-02-02 15:42:35,460 - root - INFO - GameCompanion instance created successfully
+2026-02-02 15:42:37,966 - root - INFO - Launching submodule: utilities\GameCompanion.py
+2026-02-02 15:42:37,966 - root - INFO - Execution mode - frozen: False, MEIPASS: False
+2026-02-02 15:42:37,966 - root - INFO - Attempting direct module import for: utilities/GameCompanion.py
+2026-02-02 15:42:37,966 - root - INFO - Importing GameCompanion module
+2026-02-02 15:42:37,966 - root - INFO - GameCompanion import successful
+2026-02-02 15:42:37,966 - root - INFO - Initializing LegionDatabase...
+2026-02-02 15:42:37,966 - root - INFO - Loading catalog.json...
+2026-02-02 15:42:37,968 - root - INFO - Loading internal legacy units...
+2026-02-02 15:42:37,968 - root - INFO - Loading custom units...
+2026-02-02 15:42:37,969 - root - INFO - Loading custom upgrades...
+2026-02-02 15:42:37,970 - root - INFO - Loading custom battle cards...
+2026-02-02 15:42:37,970 - root - INFO - GameCompanion initialized.
+2026-02-02 15:42:37,970 - PIL.PngImagePlugin - DEBUG - STREAM b'IHDR' 16 13
+2026-02-02 15:42:37,970 - PIL.PngImagePlugin - DEBUG - STREAM b'tEXt' 41 25
+2026-02-02 15:42:37,970 - PIL.PngImagePlugin - DEBUG - STREAM b'iTXt' 78 902
+2026-02-02 15:42:37,970 - PIL.PngImagePlugin - DEBUG - STREAM b'IDAT' 992 407023
+2026-02-02 15:42:38,054 - root - INFO - GameCompanion instance created successfully
+2026-02-02 15:42:46,971 - PIL.PngImagePlugin - DEBUG - STREAM b'IHDR' 16 13
+2026-02-02 15:42:46,971 - PIL.PngImagePlugin - DEBUG - STREAM b'tEXt' 41 25
+2026-02-02 15:42:46,971 - PIL.PngImagePlugin - DEBUG - STREAM b'iTXt' 78 902
+2026-02-02 15:42:46,971 - PIL.PngImagePlugin - DEBUG - STREAM b'IDAT' 992 407023
+2026-02-02 15:47:00,372 - root - INFO - Enhanced logging initialized with exception capture.
+2026-02-02 15:47:00,380 - PIL.PngImagePlugin - DEBUG - STREAM b'IHDR' 16 13
+2026-02-02 15:47:00,380 - PIL.PngImagePlugin - DEBUG - STREAM b'tEXt' 41 25
+2026-02-02 15:47:00,380 - PIL.PngImagePlugin - DEBUG - STREAM b'iTXt' 78 902
+2026-02-02 15:47:00,380 - PIL.PngImagePlugin - DEBUG - STREAM b'IDAT' 992 407023
+2026-02-02 15:47:00,466 - PIL.PngImagePlugin - DEBUG - STREAM b'IHDR' 16 13
+2026-02-02 15:47:00,466 - PIL.PngImagePlugin - DEBUG - STREAM b'tEXt' 41 25
+2026-02-02 15:47:00,466 - PIL.PngImagePlugin - DEBUG - STREAM b'iTXt' 78 902
+2026-02-02 15:47:00,466 - PIL.PngImagePlugin - DEBUG - STREAM b'IDAT' 992 407023
+2026-02-02 15:48:32,776 - root - INFO - Enhanced logging initialized with exception capture.
+2026-02-02 15:48:32,787 - PIL.PngImagePlugin - DEBUG - STREAM b'IHDR' 16 13
+2026-02-02 15:48:32,787 - PIL.PngImagePlugin - DEBUG - STREAM b'tEXt' 41 25
+2026-02-02 15:48:32,787 - PIL.PngImagePlugin - DEBUG - STREAM b'iTXt' 78 902
+2026-02-02 15:48:32,788 - PIL.PngImagePlugin - DEBUG - STREAM b'IDAT' 992 407023
+2026-02-02 15:48:32,874 - PIL.PngImagePlugin - DEBUG - STREAM b'IHDR' 16 13
+2026-02-02 15:48:32,874 - PIL.PngImagePlugin - DEBUG - STREAM b'tEXt' 41 25
+2026-02-02 15:48:32,874 - PIL.PngImagePlugin - DEBUG - STREAM b'iTXt' 78 902
+2026-02-02 15:48:32,874 - PIL.PngImagePlugin - DEBUG - STREAM b'IDAT' 992 407023
+2026-02-02 15:48:33,987 - root - INFO - Launching submodule: utilities\CustomFactoryMenu.py
+2026-02-02 15:48:33,988 - root - INFO - Execution mode - frozen: False, MEIPASS: False
+2026-02-02 15:48:33,988 - root - INFO - Attempting direct module import for: utilities/CustomFactoryMenu.py
+2026-02-02 15:48:33,988 - root - INFO - Importing CustomFactoryMenu module
+2026-02-02 15:48:33,988 - root - INFO - CustomFactoryMenu import successful
+2026-02-02 15:48:33,991 - root - INFO - CustomFactoryMenu instance created successfully
+2026-02-02 15:48:34,623 - root - INFO - CustomFactory launching: utilities\CustomUnitCreator.py
+2026-02-02 15:48:34,623 - root - INFO - Debug: sys.frozen = False, has _MEIPASS = False, is_exe = False
+2026-02-02 15:48:34,623 - root - INFO - Executing subprocess command: ['C:\\Users\\devil\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\python.exe', 'utilities\\CustomUnitCreator.py']
+2026-02-02 15:48:41,030 - root - INFO - CustomFactory launching: utilities\CustomCommandCardCreator.py
+2026-02-02 15:48:41,030 - root - INFO - Debug: sys.frozen = False, has _MEIPASS = False, is_exe = False
+2026-02-02 15:48:41,030 - root - INFO - Executing subprocess command: ['C:\\Users\\devil\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\python.exe', 'utilities\\CustomCommandCardCreator.py']
+2026-02-02 15:48:41,832 - root - INFO - CustomFactory launching: utilities\CustomUpgradeCreator.py
+2026-02-02 15:48:41,833 - root - INFO - Debug: sys.frozen = False, has _MEIPASS = False, is_exe = False
+2026-02-02 15:48:41,833 - root - INFO - Executing subprocess command: ['C:\\Users\\devil\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\python.exe', 'utilities\\CustomUpgradeCreator.py']
+2026-02-02 15:48:42,236 - root - INFO - CustomFactory launching: utilities\CustomBattleCardCreator.py
+2026-02-02 15:48:42,236 - root - INFO - Debug: sys.frozen = False, has _MEIPASS = False, is_exe = False
+2026-02-02 15:48:42,236 - root - INFO - Executing subprocess command: ['C:\\Users\\devil\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\python.exe', 'utilities\\CustomBattleCardCreator.py']
+2026-02-02 15:48:42,599 - root - INFO - CustomFactory launching: utilities\BattlefieldMapCreator.py
+2026-02-02 15:48:42,599 - root - INFO - Debug: sys.frozen = False, has _MEIPASS = False, is_exe = False
+2026-02-02 15:48:42,599 - root - INFO - Executing subprocess command: ['C:\\Users\\devil\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\python.exe', 'utilities\\BattlefieldMapCreator.py']
+2026-02-02 15:48:42,889 - root - INFO - CustomFactory launching: utilities\CardPrinter.py
+2026-02-02 15:48:42,889 - root - INFO - Debug: sys.frozen = False, has _MEIPASS = False, is_exe = False
+2026-02-02 15:48:42,890 - root - INFO - Executing subprocess command: ['C:\\Users\\devil\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\python.exe', 'utilities\\CardPrinter.py']
+2026-02-02 15:48:46,202 - root - INFO - Launching submodule: utilities\ArmeeBuilder.py
+2026-02-02 15:48:46,202 - root - INFO - Execution mode - frozen: False, MEIPASS: False
+2026-02-02 15:48:46,202 - root - INFO - Attempting direct module import for: utilities/ArmeeBuilder.py
+2026-02-02 15:48:46,202 - root - INFO - Importing ArmeeBuilder module
+2026-02-02 15:48:46,202 - root - INFO - ArmeeBuilder import successful
+2026-02-02 15:48:46,202 - root - INFO - Initializing LegionDatabase...
+2026-02-02 15:48:46,202 - root - INFO - Loading catalog.json...
+2026-02-02 15:48:46,205 - root - INFO - Loading internal legacy units...
+2026-02-02 15:48:46,205 - root - INFO - Loading custom units...
+2026-02-02 15:48:46,206 - root - INFO - Loading custom upgrades...
+2026-02-02 15:48:46,206 - root - INFO - Loading custom battle cards...
+2026-02-02 15:48:46,206 - root - INFO - ArmeeBuilder initialized.
+2026-02-02 15:48:46,207 - root - INFO - Using writable directory for armies: C:\Users\devil\SWLegion\SWLegion\Armeen
+2026-02-02 15:48:46,388 - root - INFO - ArmeeBuilder instance created successfully
+2026-02-02 15:48:52,968 - root - INFO - Launching submodule: utilities\MissionBuilder.py
+2026-02-02 15:48:52,968 - root - INFO - Execution mode - frozen: False, MEIPASS: False
+2026-02-02 15:48:52,968 - root - INFO - Attempting direct module import for: utilities/MissionBuilder.py
+2026-02-02 15:48:52,968 - root - INFO - Importing MissionBuilder module
+2026-02-02 15:48:52,968 - root - INFO - MissionBuilder import successful
+2026-02-02 15:48:52,969 - PIL.PngImagePlugin - DEBUG - STREAM b'IHDR' 16 13
+2026-02-02 15:48:52,969 - PIL.PngImagePlugin - DEBUG - STREAM b'tEXt' 41 25
+2026-02-02 15:48:52,969 - PIL.PngImagePlugin - DEBUG - STREAM b'iTXt' 78 902
+2026-02-02 15:48:52,969 - PIL.PngImagePlugin - DEBUG - STREAM b'IDAT' 992 407023
+2026-02-02 15:48:53,035 - root - INFO - Initializing LegionDatabase...
+2026-02-02 15:48:53,036 - root - INFO - Loading catalog.json...
+2026-02-02 15:48:53,038 - root - INFO - Loading internal legacy units...
+2026-02-02 15:48:53,038 - root - INFO - Loading custom units...
+2026-02-02 15:48:53,039 - root - INFO - Loading custom upgrades...
+2026-02-02 15:48:53,039 - root - INFO - Loading custom battle cards...
+2026-02-02 15:48:53,075 - root - INFO - MissionBuilder instance created successfully
+2026-02-02 15:49:25,048 - root - INFO - Enhanced logging initialized with exception capture.
+2026-02-02 15:49:25,057 - PIL.PngImagePlugin - DEBUG - STREAM b'IHDR' 16 13
+2026-02-02 15:49:25,057 - PIL.PngImagePlugin - DEBUG - STREAM b'tEXt' 41 25
+2026-02-02 15:49:25,057 - PIL.PngImagePlugin - DEBUG - STREAM b'iTXt' 78 902
+2026-02-02 15:49:25,058 - PIL.PngImagePlugin - DEBUG - STREAM b'IDAT' 992 407023
+2026-02-02 15:49:25,142 - PIL.PngImagePlugin - DEBUG - STREAM b'IHDR' 16 13
+2026-02-02 15:49:25,142 - PIL.PngImagePlugin - DEBUG - STREAM b'tEXt' 41 25
+2026-02-02 15:49:25,142 - PIL.PngImagePlugin - DEBUG - STREAM b'iTXt' 78 902
+2026-02-02 15:49:25,142 - PIL.PngImagePlugin - DEBUG - STREAM b'IDAT' 992 407023
+2026-02-02 15:49:50,546 - root - INFO - Launching submodule: utilities\CustomFactoryMenu.py
+2026-02-02 15:49:50,546 - root - INFO - Execution mode - frozen: False, MEIPASS: False
+2026-02-02 15:49:50,546 - root - INFO - Attempting direct module import for: utilities/CustomFactoryMenu.py
+2026-02-02 15:49:50,546 - root - INFO - Importing CustomFactoryMenu module
+2026-02-02 15:49:50,547 - root - INFO - CustomFactoryMenu import successful
+2026-02-02 15:49:50,549 - root - INFO - CustomFactoryMenu instance created successfully
+2026-02-02 15:49:51,262 - root - INFO - CustomFactory launching: utilities\CustomUnitCreator.py
+2026-02-02 15:49:51,262 - root - INFO - Debug: sys.frozen = False, has _MEIPASS = False, is_exe = False
+2026-02-02 15:49:51,263 - root - INFO - Executing subprocess command: ['C:\\Users\\devil\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\python.exe', 'utilities\\CustomUnitCreator.py']
+2026-02-02 15:49:54,817 - root - INFO - CustomFactory launching: utilities\CustomCommandCardCreator.py
+2026-02-02 15:49:54,817 - root - INFO - Debug: sys.frozen = False, has _MEIPASS = False, is_exe = False
+2026-02-02 15:49:54,818 - root - INFO - Executing subprocess command: ['C:\\Users\\devil\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\python.exe', 'utilities\\CustomCommandCardCreator.py']
+2026-02-02 15:50:07,418 - root - INFO - CustomFactory launching: utilities\CustomBattleCardCreator.py
+2026-02-02 15:50:07,418 - root - INFO - Debug: sys.frozen = False, has _MEIPASS = False, is_exe = False
+2026-02-02 15:50:07,418 - root - INFO - Executing subprocess command: ['C:\\Users\\devil\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\python.exe', 'utilities\\CustomBattleCardCreator.py']
