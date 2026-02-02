@@ -436,7 +436,10 @@ class LegionDatabase:
                     "points": upg.get("points", 0),
                     "restricted_to": restrictions,
                     "adds_mini": adds_mini,
-                    "id": uid
+                    "id": uid,
+                    "text": upg.get("text", ""),  # WICHTIG: Text-Feld hinzufügen
+                    "keywords": upg.get("keywords", []),
+                    "waves": upg.get("waves", [])
                 }
                 self.upgrades.append(upg_dict)
 

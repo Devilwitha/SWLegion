@@ -32,7 +32,11 @@ class LegionArmyBuilder:
         self.db = LegionDatabase()
         self.root = root
         self.root.title("SW Legion: Army Architect v4.0 (Save/Load)")
-        self.root.geometry("1200x800")
+        self.root.geometry("1200x1100")
+
+        # Tooltip-System initialisieren
+        self.tooltip_window = None
+        self.current_tooltip_widget = None
 
         logging.info("ArmeeBuilder initialized.")
 
@@ -41,11 +45,56 @@ class LegionArmyBuilder:
         self.total_points = 0
         self.current_command_cards = []
         
+        # Text-Display für Details
+        self.selected_unit_text = tk.StringVar()
+        
         # Basis-Ordner für Speicherstände erstellen (beschreibbar)
         self.base_dir = get_writable_path("Armeen")
         logging.info(f"Using writable directory for armies: {self.base_dir}")
 
         self.setup_ui()
+        self.setup_tooltips()
+
+    def setup_tooltips(self):
+        """Initialisiert das Tooltip-System für Hover-Texte"""
+        self.tooltip_window = None
+        
+    def create_tooltip(self, widget, text):
+        """Fügt einem Widget einen Hover-Tooltip hinzu"""
+        def on_enter(event):
+            self.show_tooltip(event, text)
+        def on_leave(event):
+            self.hide_tooltip()
+            
+        widget.bind("<Enter>", on_enter)
+        widget.bind("<Leave>", on_leave)
+        
+    def show_tooltip(self, event, text):
+        """Zeigt Tooltip an"""
+        if self.tooltip_window:
+            self.tooltip_window.destroy()
+            
+        self.tooltip_window = tk.Toplevel(self.root)
+        self.tooltip_window.wm_overrideredirect(True)
+        
+        # Position relativ zur Maus
+        x = event.x_root + 10
+        y = event.y_root + 10
+        self.tooltip_window.geometry(f"+{x}+{y}")
+        
+        # Tooltip-Text mit Hintergrund
+        label = tk.Label(self.tooltip_window, text=text, 
+                        background="#ffffe0", foreground="black",
+                        font=("Arial", 9), justify="left",
+                        wraplength=300, relief="solid", borderwidth=1,
+                        padx=5, pady=3)
+        label.pack()
+        
+    def hide_tooltip(self):
+        """Versteckt Tooltip"""
+        if self.tooltip_window:
+            self.tooltip_window.destroy()
+            self.tooltip_window = None
 
     def setup_ui(self):
         # Haupt-Container (Split Panel)
@@ -81,10 +130,62 @@ class LegionArmyBuilder:
         self.tree_units.configure(yscrollcommand=sb_units.set)
 
         self.tree_units.bind("<<TreeviewSelect>>", self.show_unit_stats)
+        
+        # Hover-Tooltips für Einheiten
+        def show_unit_hover_tooltip(event):
+            item = self.tree_units.identify_row(event.y)
+            if item:
+                values = self.tree_units.item(item, "values")
+                if values:
+                    unit_name = values[0]
+                    faction = self.current_faction.get()
+                    unit_data = next((u for u in self.db.units[faction] if u["name"] == unit_name), None)
+                    
+                    if unit_data and self.tooltip_window is None:
+                        tooltip_text = self.format_unit_hover_tooltip(unit_data)
+                        
+                        x = event.x_root + 20
+                        y = event.y_root + 20
+                        
+                        self.tooltip_window = tk.Toplevel(self.tree_units)
+                        self.tooltip_window.wm_overrideredirect(True)
+                        self.tooltip_window.geometry(f"+{x}+{y}")
+                        
+                        tooltip_frame = tk.Frame(self.tooltip_window, bg="lightyellow", 
+                                               relief="solid", borderwidth=1)
+                        tooltip_frame.pack()
+                        
+                        tooltip_label = tk.Label(tooltip_frame, text=tooltip_text, 
+                                               bg="lightyellow", font=("Arial", 9), 
+                                               wraplength=300, justify="left")
+                        tooltip_label.pack(padx=5, pady=2)
 
-        # 3. Info Box
-        self.lbl_stats = tk.Label(left_frame, text="Wähle eine Einheit für Details...", justify=tk.LEFT, bg="#e1e1e1", relief=tk.SUNKEN, padx=10, pady=10, font=("Consolas", 9))
-        self.lbl_stats.pack(fill="x", pady=5)
+        def hide_unit_hover_tooltip(event):
+            if self.tooltip_window:
+                self.tooltip_window.destroy()
+                self.tooltip_window = None
+
+        self.tree_units.bind("<Motion>", show_unit_hover_tooltip)
+        self.tree_units.bind("<Leave>", hide_unit_hover_tooltip)
+        self.tree_units.bind("<Button-1>", hide_unit_hover_tooltip)
+
+        # 3. Info Box (erweitert für detaillierte Einheiten-Info)
+        info_frame = tk.Frame(left_frame)
+        info_frame.pack(fill="both", expand=True, pady=5)
+        
+        # Text-Widget für scrollbare Einheiten-Details
+        self.txt_unit_details = tk.Text(info_frame, wrap="word", font=("Consolas", 9), 
+                                       bg="#e1e1e1", relief=tk.SUNKEN, padx=10, pady=10)
+        self.txt_unit_details.pack(fill="both", expand=True, side="left")
+        
+        # Scrollbar für Text-Widget
+        scrollbar_details = ttk.Scrollbar(info_frame, orient="vertical", command=self.txt_unit_details.yview)
+        scrollbar_details.pack(side="right", fill="y")
+        self.txt_unit_details.config(yscrollcommand=scrollbar_details.set)
+        
+        # Initial-Text
+        self.txt_unit_details.insert("1.0", "Wähle eine Einheit für Details...")
+        self.txt_unit_details.config(state="disabled")
 
         # 4. Hinzufügen Button
         btn_config = tk.Button(left_frame, text="Einheit anpassen & hinzufügen >", bg="#2196F3", fg="white", font=("Segoe UI", 11, "bold"), command=self.open_config_window)
@@ -136,6 +237,22 @@ class LegionArmyBuilder:
         # Gesamtpunkte
         self.lbl_total = tk.Label(right_frame, text="Gesamtpunkte: 0 / 800", font=("Segoe UI", 16, "bold"), bg="#f0f0f0", fg="#333")
         self.lbl_total.pack(pady=20)
+
+        # Text-Display für Command Cards und Ausrüstung
+        info_text_frame = tk.LabelFrame(right_frame, text="📖 Details", font=("Arial", 10, "bold"))
+        info_text_frame.pack(fill="x", pady=10)
+        
+        self.txt_card_details = tk.Text(info_text_frame, wrap="word", font=("Arial", 9), 
+                                       height=6, bg="#f9f9f9", relief=tk.SUNKEN)
+        self.txt_card_details.pack(fill="x", padx=5, pady=5)
+        
+        scrollbar_card = ttk.Scrollbar(info_text_frame, orient="vertical", command=self.txt_card_details.yview)
+        scrollbar_card.pack(side="right", fill="y")
+        self.txt_card_details.config(yscrollcommand=scrollbar_card.set)
+        
+        # Initial-Text
+        self.txt_card_details.insert("1.0", "Klicke auf Command Cards oder Ausrüstung für Details...")
+        self.txt_card_details.config(state="disabled")
 
         # Export Text
         btn_export = tk.Button(right_frame, text="Liste in Zwischenablage kopieren (Text)", command=self.copy_to_clipboard, bg="#4CAF50", fg="white", height=2, font=("Segoe UI", 10, "bold"))
@@ -247,7 +364,12 @@ class LegionArmyBuilder:
 
     def show_unit_stats(self, event):
         selected = self.tree_units.focus()
-        if not selected: return
+        if not selected: 
+            self.txt_unit_details.config(state="normal")
+            self.txt_unit_details.delete("1.0", "end")
+            self.txt_unit_details.insert("1.0", "Wähle eine Einheit für Details...")
+            self.txt_unit_details.config(state="disabled")
+            return
         
         vals = self.tree_units.item(selected, "values")
         name = vals[0]
@@ -257,10 +379,281 @@ class LegionArmyBuilder:
         unit_data = next((u for u in self.db.units[faction] if u["name"] == name), None)
         
         if unit_data:
-            txt = (f"Lebenspunkte: {unit_data['hp']} | Mut: {unit_data['courage']}\n"
-                   f"Slots: {', '.join(unit_data['slots'])}\n"
-                   f"Info: {unit_data['info']}")
-            self.lbl_stats.config(text=txt)
+            # Erstelle detaillierte Einheiten-Beschreibung
+            detail_text = self.format_unit_details(unit_data)
+            
+            self.txt_unit_details.config(state="normal")
+            self.txt_unit_details.delete("1.0", "end")
+            self.txt_unit_details.insert("1.0", detail_text)
+            self.txt_unit_details.config(state="disabled")
+
+    def format_unit_details(self, unit_data):
+        """Formatiert detaillierte Einheiten-Information für Text-Widget"""
+        text = f"🎯 {unit_data['name']}\n"
+        text += "=" * 40 + "\n\n"
+        
+        # Basis-Statistiken
+        text += "📊 BASISWERTE:\n"
+        text += f"❤️ Lebenspunkte: {unit_data.get('hp', 'N/A')}\n"
+        text += f"⚔️ Mut: {unit_data.get('courage', 'N/A')}\n"
+        text += f"🏃 Geschwindigkeit: {unit_data.get('speed', 'N/A')}\n"
+        text += f"🛡️ Deckung: {unit_data.get('cover', 'N/A')}\n"
+        text += f"👥 Miniaturen: {unit_data.get('minis', 'N/A')}\n"
+        text += f"🏆 Rang: {unit_data.get('rank', 'N/A')}\n"
+        text += f"💰 Kosten: {unit_data.get('points', 'N/A')} Punkte\n\n"
+        
+        # Ausrüstungsslots
+        if 'slots' in unit_data and unit_data['slots']:
+            text += "🎒 AUSRÜSTUNGSSLOTS:\n"
+            for slot in unit_data['slots']:
+                text += f"• {slot}\n"
+            text += "\n"
+        
+        # Schlüsselwörter/Fähigkeiten
+        if 'keywords' in unit_data and unit_data['keywords']:
+            text += "⭐ SCHLÜSSELWÖRTER:\n"
+            for keyword in unit_data['keywords']:
+                text += f"• {keyword}\n"
+            text += "\n"
+        
+        # Waffen
+        if 'weapons' in unit_data and unit_data['weapons']:
+            text += "⚔️ WAFFEN:\n"
+            for weapon in unit_data['weapons']:
+                if isinstance(weapon, dict):
+                    weapon_name = weapon.get('name', 'Unbenannte Waffe')
+                    weapon_range = weapon.get('range', 'N/A')
+                    weapon_dice = weapon.get('dice', 'N/A')
+                    text += f"• {weapon_name}\n"
+                    text += f"  Reichweite: {weapon_range}\n"
+                    text += f"  Würfel: {weapon_dice}\n"
+                    if 'keywords' in weapon and weapon['keywords']:
+                        text += f"  Keywords: {', '.join(weapon['keywords'])}\n"
+                    text += "\n"
+                else:
+                    text += f"• {weapon}\n"
+        
+        # Beschreibung/Info
+        if 'info' in unit_data and unit_data['info']:
+            text += "ℹ️ BESCHREIBUNG:\n"
+            text += f"{unit_data['info']}\n\n"
+        
+        # Zusätzliche Daten
+        if 'text' in unit_data and unit_data['text']:
+            text += "📜 REGELTEXT:\n"
+            text += f"{unit_data['text']}\n\n"
+        
+        return text
+
+    def create_tooltip(self, widget, text):
+        """Erstellt ein Hover-Tooltip für ein Widget im Army Builder"""
+        def show_tooltip(event):
+            if self.tooltip_window:
+                self.tooltip_window.destroy()
+            
+            x = widget.winfo_rootx() + 20
+            y = widget.winfo_rooty() + 20
+            
+            self.tooltip_window = tk.Toplevel(widget)
+            self.tooltip_window.wm_overrideredirect(True)
+            self.tooltip_window.geometry(f"+{x}+{y}")
+            
+            # Tooltip-Inhalt
+            tooltip_frame = tk.Frame(self.tooltip_window, bg="lightyellow", 
+                                   relief="solid", borderwidth=1)
+            tooltip_frame.pack()
+            
+            tooltip_label = tk.Label(tooltip_frame, text=text, bg="lightyellow", 
+                                   font=("Arial", 9), wraplength=350, justify="left")
+            tooltip_label.pack(padx=5, pady=2)
+            
+            self.current_tooltip_widget = widget
+
+        def hide_tooltip(event):
+            if self.tooltip_window:
+                self.tooltip_window.destroy()
+                self.tooltip_window = None
+            self.current_tooltip_widget = None
+
+        widget.bind("<Enter>", show_tooltip)
+        widget.bind("<Leave>", hide_tooltip)
+        widget.bind("<ButtonPress>", hide_tooltip)
+
+    def format_upgrade_tooltip_text(self, upgrade_data):
+        """Formatiert Ausrüstungs-Tooltip für Army Builder"""
+        if not upgrade_data:
+            return "Keine Ausrüstungsinformation verfügbar"
+        
+        tooltip_text = f"🎒 {upgrade_data.get('name', 'Unbekannt')}\n"
+        tooltip_text += f"💰 Kosten: {upgrade_data.get('points', 'N/A')} Punkte\n"
+        tooltip_text += f"🔧 Slot: {upgrade_data.get('slot', 'N/A')}\n\n"
+        
+        # Regeltext
+        upgrade_text = upgrade_data.get('text', '')
+        if upgrade_text:
+            tooltip_text += f"📖 Effekt:\n{upgrade_text}\n"
+        
+        # Schlüsselwörter
+        keywords = upgrade_data.get('keywords', [])
+        if keywords:
+            tooltip_text += f"\n⭐ Keywords: {', '.join(keywords)}"
+        
+        return tooltip_text
+        
+    def is_command_card_valid_for_army(self, command_card, army_unit_names, faction):
+        """Prüft ob Command Card für die aktuelle Armee verfügbar ist"""
+        if not command_card:
+            return False
+        
+        # Immer verfügbare generische Command Cards (Standing Orders, etc.)
+        generic_cards = ["Standing Orders", "Ambush", "Push", "Assault"]
+        card_name = command_card.get('name', '')
+        
+        if card_name in generic_cards:
+            return True
+            
+        # Prüfe auf Einheiten-spezifische Beschränkungen
+        restricted_to = command_card.get('restricted_to_unit', [])
+        if restricted_to:
+            # Card ist nur für bestimmte Einheiten verfügbar
+            for unit_id in restricted_to:
+                # Finde Einheit im DB und prüfe Namen
+                for unit in self.db.units.get(faction, []):
+                    if (unit.get('id') == unit_id or unit.get('name') == unit_id) and unit.get('name') in army_unit_names:
+                        return True
+            return False
+        
+        # Prüfe auf Rang-Beschränkungen
+        card_text = command_card.get('text', '').lower()
+        
+        # Kommandeur-spezifische Cards
+        if 'commander' in card_text or 'kommandeur' in card_text:
+            # Prüfe ob Kommandeur in Armee
+            for unit_name in army_unit_names:
+                unit_data = next((u for u in self.db.units.get(faction, []) if u.get('name') == unit_name), None)
+                if unit_data and unit_data.get('rank') == 'Commander':
+                    return True
+            return False
+        
+        # Operative-spezifische Cards
+        if 'operative' in card_text:
+            for unit_name in army_unit_names:
+                unit_data = next((u for u in self.db.units.get(faction, []) if u.get('name') == unit_name), None)
+                if unit_data and unit_data.get('rank') == 'Operative':
+                    return True
+            return False
+            
+        # Standardmäßig alle anderen Cards verfügbar wenn keine spezifischen Beschränkungen
+        return True
+
+    def display_card_details(self, command_card):
+        """Zeigt Command Card Details im Text-Widget an"""
+        if not command_card:
+            return
+            
+        self.txt_card_details.config(state="normal")
+        self.txt_card_details.delete("1.0", "end")
+        
+        detail_text = f"📜 {command_card.get('name', 'Unbekannt')}\n"
+        detail_text += "=" * 50 + "\n\n"
+        
+        # Basis-Info
+        detail_text += f"🎯 Pips: {command_card.get('pips', 'N/A')}\n"
+        
+        # Beschränkungen
+        restricted_to = command_card.get('restricted_to_unit', [])
+        if restricted_to:
+            detail_text += f"🔒 Beschränkt auf: {', '.join(restricted_to)}\n"
+        
+        detail_text += "\n📖 EFFEKT:\n"
+        card_text = command_card.get('text', 'Kein Effekt-Text verfügbar')
+        detail_text += f"{card_text}\n\n"
+        
+        # Keywords falls vorhanden
+        keywords = command_card.get('keywords', [])
+        if keywords:
+            detail_text += f"⭐ Keywords: {', '.join(keywords)}\n\n"
+        
+        # Multi-Target Hinweis
+        card_text_lower = card_text.lower()
+        if any(keyword in card_text_lower for keyword in ['bis zu', 'all', 'alle', 'choose', 'wähle', 'multiple']):
+            detail_text += "⚡ Diese Karte kann mehrere Ziele betreffen!\n"
+        
+        self.txt_card_details.insert("1.0", detail_text)
+        self.txt_card_details.config(state="disabled")
+
+    def display_upgrade_details(self, upgrade_data):
+        """Zeigt Upgrade-Details im Text-Widget an"""
+        if not upgrade_data:
+            return
+            
+        self.txt_card_details.config(state="normal")
+        self.txt_card_details.delete("1.0", "end")
+        
+        detail_text = f"🎒 {upgrade_data.get('name', 'Unbekannt')}\n"
+        detail_text += "=" * 50 + "\n\n"
+        
+        # Basis-Info
+        detail_text += f"💰 Kosten: {upgrade_data.get('points', 'N/A')} Punkte\n"
+        detail_text += f"🔧 Slot: {upgrade_data.get('type', upgrade_data.get('slot', 'N/A'))}\n\n"
+        
+        # Effekt-Text - Prüfe sowohl 'text' als auch andere mögliche Felder
+        upgrade_text = upgrade_data.get('text', '')
+        if not upgrade_text:
+            upgrade_text = upgrade_data.get('description', '')
+        if not upgrade_text:
+            upgrade_text = upgrade_data.get('effect', '')
+            
+        if upgrade_text:
+            detail_text += "📖 EFFEKT:\n"
+            detail_text += f"{upgrade_text}\n\n"
+        
+        # Waffen-Daten falls vorhanden
+        if upgrade_data.get('type') == 'weapon' or 'weapon' in str(upgrade_data.get('slot', '')).lower():
+            if 'range' in upgrade_data:
+                detail_text += f"🎯 Reichweite: {upgrade_data.get('range', 'N/A')}\n"
+            if 'dice' in upgrade_data:
+                detail_text += f"🎲 Würfel: {upgrade_data.get('dice', 'N/A')}\n"
+            if 'attack' in upgrade_data:
+                detail_text += f"⚔️ Angriff: {upgrade_data.get('attack', 'N/A')}\n"
+        
+        # Schlüsselwörter
+        keywords = upgrade_data.get('keywords', [])
+        if keywords:
+            detail_text += f"⭐ Keywords: {', '.join(keywords)}\n"
+        
+        # Beschränkungen
+        restrictions = upgrade_data.get('restricted_to', [])
+        if restrictions:
+            detail_text += f"🔒 Beschränkt auf: {', '.join(restrictions)}\n"
+            
+        self.txt_card_details.insert("1.0", detail_text)
+        self.txt_card_details.config(state="disabled")
+
+    def format_unit_hover_tooltip(self, unit_data):
+        """Formatiert kurze Unit-Info für Hover-Tooltip"""
+        if not unit_data:
+            return "Keine Einheiteninformation verfügbar"
+        
+        tooltip_text = f"🎯 {unit_data.get('name', 'Unbekannt')}\n"
+        tooltip_text += f"💰 Kosten: {unit_data.get('points', 'N/A')} Punkte\n"
+        tooltip_text += f"❤️ HP: {unit_data.get('hp', 'N/A')}\n"
+        tooltip_text += f"⚔️ Mut: {unit_data.get('courage', 'N/A')}\n"
+        tooltip_text += f"🏆 Rang: {unit_data.get('rank', 'N/A')}\n"
+        
+        # Kurze Info über Slots
+        slots = unit_data.get('slots', [])
+        if slots:
+            tooltip_text += f"🎒 Slots: {len(slots)} ({', '.join(slots[:3])}{'...' if len(slots) > 3 else ''})\n"
+        
+        # Kurze Beschreibung wenn vorhanden
+        info = unit_data.get('info', '')
+        if info and len(info) < 100:
+            tooltip_text += f"\n📖 {info}"
+        elif info:
+            tooltip_text += f"\n📖 {info[:97]}..."
+        
+        return tooltip_text
 
     def open_config_window(self):
         selected = self.tree_units.focus()
@@ -278,13 +671,21 @@ class LegionArmyBuilder:
         # --- KONFIGURATIONS FENSTER (POPUP) ---
         top = tk.Toplevel(self.root)
         top.title(f"Ausrüstung: {unit_name}")
-        top.geometry("550x650")
+        top.geometry("800x750")
         
         tk.Label(top, text=f"Konfiguration: {unit_name}", font=("Segoe UI", 12, "bold")).pack(pady=10)
         
+        # Hauptcontainer mit zwei Bereichen
+        main_container = tk.Frame(top)
+        main_container.pack(fill="both", expand=True, padx=10, pady=5)
+        
+        # Links: Ausrüstungsauswahl
+        left_frame = tk.Frame(main_container)
+        left_frame.pack(side="left", fill="both", expand=True)
+        
         # Scrollbarer Bereich (Canvas) für viele Slots
-        canvas = tk.Canvas(top)
-        scrollbar = tk.Scrollbar(top, orient="vertical", command=canvas.yview)
+        canvas = tk.Canvas(left_frame)
+        scrollbar = tk.Scrollbar(left_frame, orient="vertical", command=canvas.yview)
         scroll_frame = tk.Frame(canvas)
 
         scroll_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
@@ -293,6 +694,73 @@ class LegionArmyBuilder:
 
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
+        
+        # Rechts: Text-Details
+        right_frame = tk.LabelFrame(main_container, text="📖 Ausrüstungs-Details", font=("Arial", 10, "bold"))
+        right_frame.pack(side="right", fill="both", expand=True, padx=(10, 0))
+        
+        # Text-Widget für Ausrüstungs-Details im Popup
+        config_text_widget = tk.Text(right_frame, wrap="word", font=("Arial", 9), 
+                                    bg="#f9f9f9", relief=tk.SUNKEN, width=40)
+        config_text_widget.pack(fill="both", expand=True, padx=5, pady=5)
+        
+        config_scrollbar = ttk.Scrollbar(right_frame, orient="vertical", command=config_text_widget.yview)
+        config_scrollbar.pack(side="right", fill="y")
+        config_text_widget.config(yscrollcommand=config_scrollbar.set)
+        
+        # Initial-Text
+        config_text_widget.insert("1.0", "Wähle Ausrüstung aus den Dropdowns für Details...")
+        config_text_widget.config(state="disabled")
+        
+        def display_upgrade_in_popup(upgrade_data):
+            """Zeigt Upgrade-Details im Popup-Text-Widget an"""
+            if not upgrade_data:
+                return
+                
+            config_text_widget.config(state="normal")
+            config_text_widget.delete("1.0", "end")
+            
+            detail_text = f"🎒 {upgrade_data.get('name', 'Unbekannt')}\n"
+            detail_text += "=" * 40 + "\n\n"
+            
+            # Basis-Info
+            detail_text += f"💰 Kosten: {upgrade_data.get('points', 'N/A')} Punkte\n"
+            detail_text += f"🔧 Slot: {upgrade_data.get('type', upgrade_data.get('slot', 'N/A'))}\n\n"
+            
+            # Effekt-Text - Umfassende Suche
+            upgrade_text = upgrade_data.get('text', '')
+            if not upgrade_text:
+                upgrade_text = upgrade_data.get('description', '')
+            if not upgrade_text:
+                upgrade_text = upgrade_data.get('effect', '')
+                
+            if upgrade_text:
+                detail_text += "📖 EFFEKT:\n"
+                detail_text += f"{upgrade_text}\n\n"
+            
+            # Waffen-Daten
+            if upgrade_data.get('type') == 'weapon' or 'weapon' in str(upgrade_data.get('slot', '')).lower():
+                if 'range' in upgrade_data:
+                    detail_text += f"🎯 Reichweite: {upgrade_data.get('range', 'N/A')}\n"
+                if 'dice' in upgrade_data:
+                    detail_text += f"🎲 Würfel: {upgrade_data.get('dice', 'N/A')}\n"
+                if 'attack' in upgrade_data:
+                    detail_text += f"⚔️ Angriff: {upgrade_data.get('attack', 'N/A')}\n"
+                if 'keywords' in upgrade_data:
+                    detail_text += f"⚔️ Waffen-Keywords: {', '.join(upgrade_data.get('keywords', []))}\n"
+            
+            # Schlüsselwörter
+            keywords = upgrade_data.get('keywords', [])
+            if keywords:
+                detail_text += f"⭐ Keywords: {', '.join(keywords)}\n"
+            
+            # Beschränkungen
+            restrictions = upgrade_data.get('restricted_to', [])
+            if restrictions:
+                detail_text += f"🔒 Beschränkt auf: {', '.join(restrictions)}\n"
+                
+            config_text_widget.insert("1.0", detail_text)
+            config_text_widget.config(state="disabled")
 
         selectors = [] # Speichert Referenzen zu den Dropdowns
         
@@ -317,6 +785,62 @@ class LegionArmyBuilder:
             var = tk.StringVar(value=options[0])
             cb = ttk.Combobox(frame, textvariable=var, values=options, state="readonly", width=40)
             cb.pack(side=tk.RIGHT, fill="x", expand=True)
+            
+            # Tooltip für Combobox hinzufügen
+            def create_upgrade_tooltip(combo_widget, upgrade_mapping):
+                def show_upgrade_tooltip(event):
+                    current_selection = combo_widget.get()
+                    if current_selection and current_selection != "--- Leer ---":
+                        upgrade_data = upgrade_mapping.get(current_selection)
+                        if upgrade_data:
+                            tooltip_text = self.format_upgrade_tooltip_text(upgrade_data)
+                            if self.tooltip_window:
+                                self.tooltip_window.destroy()
+                            
+                            x = combo_widget.winfo_rootx() + 20
+                            y = combo_widget.winfo_rooty() + 20
+                            
+                            self.tooltip_window = tk.Toplevel(combo_widget)
+                            self.tooltip_window.wm_overrideredirect(True)
+                            self.tooltip_window.geometry(f"+{x}+{y}")
+                            
+                            tooltip_frame = tk.Frame(self.tooltip_window, bg="lightyellow", 
+                                                   relief="solid", borderwidth=1)
+                            tooltip_frame.pack()
+                            
+                            tooltip_label = tk.Label(tooltip_frame, text=tooltip_text, 
+                                                   bg="lightyellow", font=("Arial", 9), 
+                                                   wraplength=350, justify="left")
+                            tooltip_label.pack(padx=5, pady=2)
+
+                def hide_upgrade_tooltip(event):
+                    if self.tooltip_window:
+                        self.tooltip_window.destroy()
+                        self.tooltip_window = None
+
+                combo_widget.bind("<Enter>", show_upgrade_tooltip)
+                combo_widget.bind("<Leave>", hide_upgrade_tooltip)
+                combo_widget.bind("<<ComboboxSelected>>", hide_upgrade_tooltip)
+                combo_widget.bind("<Button-1>", hide_upgrade_tooltip)
+            
+            create_upgrade_tooltip(cb, upgrade_map)
+            
+            # Event für Upgrade-Auswahl und Text-Display
+            def on_upgrade_select(event, combo_widget=cb, mapping=upgrade_map):
+                selected = combo_widget.get()
+                if selected and selected != "--- Leer ---":
+                    upgrade_data = mapping.get(selected)
+                    if upgrade_data:
+                        display_upgrade_in_popup(upgrade_data)
+                else:
+                    # Zeige Standard-Text wenn "Leer" ausgewählt
+                    config_text_widget.config(state="normal")
+                    config_text_widget.delete("1.0", "end")
+                    config_text_widget.insert("1.0", "Wähle Ausrüstung aus den Dropdowns für Details...")
+                    config_text_widget.config(state="disabled")
+            
+            cb.bind("<<ComboboxSelected>>", on_upgrade_select)
+            cb.bind("<Button-1>", lambda e, combo=cb, mapping=upgrade_map: top.after(100, lambda: on_upgrade_select(None, combo, mapping)))
             
             selectors.append({"var": var, "map": upgrade_map})
 
@@ -403,6 +927,10 @@ class LegionArmyBuilder:
         if not faction:
              messagebox.showwarning("Fehler", "Bitte wähle zuerst eine Fraktion.")
              return
+             
+        if not self.current_army_list:
+             messagebox.showwarning("Info", "Füge zuerst Einheiten zur Armee hinzu, um passende Command Cards zu sehen.")
+             return
 
         top = tk.Toplevel(self.root)
         top.title("Kommandokarten Hand (7 Karten)")
@@ -434,17 +962,45 @@ class LegionArmyBuilder:
         tv_sel.column("Pips", width=30, anchor="center")
         tv_sel.pack(fill="both", expand=True)
 
-        # Load Cards
+        # Load Cards und filtere basierend auf Armee-Einheiten
         all_cards = self.db.get_command_cards(faction)
         valid_pool = []
+        
+        # Sammle alle Einheitennamen in der aktuellen Armee
+        army_unit_names = [unit['name'] for unit in self.current_army_list]
+        
         for c in all_cards:
-            valid_pool.append(c)
+            # Prüfe ob Command Card für die Armee verfügbar ist
+            if self.is_command_card_valid_for_army(c, army_unit_names, faction):
+                valid_pool.append(c)
 
         # Sort by pips
         valid_pool.sort(key=lambda x: x.get("pips", 0))
 
         for c in valid_pool:
             tv_avail.insert("", "end", values=(c["name"], c["pips"]), tags=(str(c),))
+            
+        # Event-Handler für Card-Selection und Text-Display
+        def on_card_select(event):
+            selection = event.widget.focus()
+            if selection:
+                item = event.widget.item(selection)
+                card_name = item["values"][0]
+                card = next((c for c in valid_pool if c["name"] == card_name), None)
+                if card:
+                    self.display_card_details(card)
+                    
+        def on_selected_card_select(event):
+            selection = event.widget.focus()
+            if selection:
+                item = event.widget.item(selection)
+                card_name = item["values"][0]
+                card = next((c for c in temp_selected if c["name"] == card_name), None)
+                if card:
+                    self.display_card_details(card)
+        
+        tv_avail.bind("<<TreeviewSelect>>", on_card_select)
+        tv_sel.bind("<<TreeviewSelect>>", on_selected_card_select)
 
         temp_selected = list(self.current_command_cards)
 

@@ -35,6 +35,10 @@ class GameCompanion:
         self.rules = LegionRules
         self.root = root
 
+        # Tooltip-System initialisieren
+        self.tooltip_window = None
+        self.current_tooltip_widget = None
+
         logging.info("GameCompanion initialized.")
         self.root.title("SW Legion: Game Companion & AI Simulator (v2.0 Rules)")
         self.root.geometry("1400x900")
@@ -424,6 +428,43 @@ class GameCompanion:
             "vehicle_damage": "🔥 Fahrzeug-Schadenspunkt"
         }
         return descriptions.get(marker_type, "Unbekannter Effekt")
+
+    def create_hover_tooltip(self, widget, text):
+        """Fügt einem Widget einen Hover-Tooltip hinzu"""
+        def on_enter(event):
+            self.show_hover_tooltip(event, text)
+        def on_leave(event):
+            self.hide_hover_tooltip()
+            
+        widget.bind("<Enter>", on_enter)
+        widget.bind("<Leave>", on_leave)
+        
+    def show_hover_tooltip(self, event, text):
+        """Zeigt Hover-Tooltip an"""
+        if self.tooltip_window:
+            self.tooltip_window.destroy()
+            
+        self.tooltip_window = tk.Toplevel(self.root)
+        self.tooltip_window.wm_overrideredirect(True)
+        
+        # Position relativ zur Maus
+        x = event.x_root + 10
+        y = event.y_root + 10
+        self.tooltip_window.geometry(f"+{x}+{y}")
+        
+        # Tooltip-Text mit Hintergrund
+        label = tk.Label(self.tooltip_window, text=text, 
+                        background="#ffffe0", foreground="black",
+                        font=("Arial", 9), justify="left",
+                        wraplength=400, relief="solid", borderwidth=1,
+                        padx=8, pady=5)
+        label.pack()
+        
+    def hide_hover_tooltip(self):
+        """Versteckt Hover-Tooltip"""
+        if self.tooltip_window:
+            self.tooltip_window.destroy()
+            self.tooltip_window = None
 
     def has_usable_equipment(self, unit):
         """Prüft ob die Einheit nutzbare Ausrüstung hat"""
@@ -1122,8 +1163,13 @@ class GameCompanion:
              pass
 
         for card in self.player_hand:
-            btn = tk.Radiobutton(frame_cards, text=f"{card['name']} ({card['pips']}•)", variable=self.var_selected_card_name, value=card["name"], indicatoron=0, width=40, padx=20, pady=5, selectcolor="#bbdefb")
+            btn = tk.Radiobutton(frame_cards, text=f"{card['name']} ({card['pips']}•)", 
+                               variable=self.var_selected_card_name, value=card["name"], 
+                               indicatoron=0, width=40, padx=20, pady=5, selectcolor="#bbdefb")
             btn.pack(pady=2, fill="x")
+            
+            # Hover-Tooltip für Command Cards hinzufügen
+            self.create_hover_tooltip(btn, self.format_command_card_tooltip(card))
 
         btn_play = tk.Button(self.frame_center, text="Karte Spielen", command=self.resolve_command_cards, bg="#2196F3", fg="white", font=("Segoe UI", 12, "bold"))
         btn_play.pack(pady=20)
@@ -1137,6 +1183,12 @@ class GameCompanion:
         # Get objects
         p_card = next(c for c in self.player_hand if c["name"] == p_card_name)
 
+        # Prüfe ob Multi-Target Card
+        if self.is_multi_target_card(p_card):
+            targets = self.select_multiple_targets(p_card['name'])
+            if targets:
+                self.apply_multi_target_effect(p_card, targets)
+
         # Opponent Karte wählen
         if self.ai_enabled.get():
             # AI Select
@@ -1149,6 +1201,16 @@ class GameCompanion:
             o_card = self.select_opponent_command_card()
             if not o_card:
                 return
+
+        # Prüfe auch Opponent Card für Multi-Target
+        if self.is_multi_target_card(o_card):
+            # Temporär aktive Seite auf Gegner setzen
+            original_side = self.active_side
+            self.active_side = "Opponent"
+            targets = self.select_multiple_targets(o_card['name'])
+            if targets:
+                self.apply_multi_target_effect(o_card, targets)
+            self.active_side = original_side
 
         # Move to discard
         self.player_hand.remove(p_card)
@@ -1181,6 +1243,324 @@ class GameCompanion:
         for widget in self.frame_center.winfo_children(): widget.destroy()
 
         tk.Label(self.frame_center, text=f"RUNDE {self.round_number}: Kommandokarten", font=("Segoe UI", 16, "bold")).pack(pady=10)
+
+    def is_multi_target_card(self, command_card):
+        """Prüft ob Command Card mehrere Ziele betreffen kann"""
+        if not command_card:
+            return False
+            
+        card_text = command_card.get('text', '').lower()
+        card_name = command_card.get('name', '').lower()
+        
+        # Suche nach Multi-Target Schlüsselwörtern
+        multi_target_keywords = [
+            'bis zu', 'until', 'all', 'alle', 'each', 'jede', 'jeden',
+            'choose', 'wähle', 'select', 'multiple', 'mehrere',
+            'friendly units', 'verbündete einheiten', 'up to'
+        ]
+        
+        for keyword in multi_target_keywords:
+            if keyword in card_text or keyword in card_name:
+                return True
+                
+        return False
+
+    def select_multiple_targets(self, card_name, max_targets=None):
+        """Dialog zur Auswahl mehrerer Ziele für Command Cards"""
+        if self.active_side == "Player":
+            available_units = self.player_army.get('units', [])
+            side_name = "Spieler"
+        else:
+            available_units = self.opponent_army.get('units', [])
+            side_name = "Gegner"
+            
+        # Filter nur lebende Einheiten
+        available_units = [unit for unit in available_units if unit.get('current_hp', 0) > 0]
+        
+        if not available_units:
+            messagebox.showinfo("Keine Ziele", "Keine verfügbaren Einheiten zum Auswählen!")
+            return []
+            
+        # Dialog erstellen
+        selection_window = tk.Toplevel(self.root)
+        selection_window.title(f"Wähle Ziele für {card_name}")
+        selection_window.geometry("500x400")
+        selection_window.grab_set()
+        
+        tk.Label(selection_window, text=f"Wähle Einheiten für Command Card: {card_name}", 
+                font=("Arial", 12, "bold")).pack(pady=10)
+        
+        if max_targets:
+            tk.Label(selection_window, text=f"Maximum {max_targets} Einheiten auswählen", 
+                    font=("Arial", 10), fg="blue").pack()
+        
+        # Listbox mit Checkboxen
+        frame = tk.Frame(selection_window)
+        frame.pack(fill="both", expand=True, padx=20, pady=10)
+        
+        # Scrollbare Liste
+        list_frame = tk.Frame(frame)
+        list_frame.pack(fill="both", expand=True)
+        
+        canvas = tk.Canvas(list_frame)
+        scrollbar = ttk.Scrollbar(list_frame, orient="vertical", command=canvas.yview)
+        scrollable_frame = tk.Frame(canvas)
+        
+        canvas.configure(yscrollcommand=scrollbar.set)
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        
+        # Checkbox Variables
+        selected_vars = []
+        selected_units = []
+        
+        for i, unit in enumerate(available_units):
+            var = tk.BooleanVar()
+            selected_vars.append(var)
+            
+            unit_name = unit.get('name', f'Einheit {i+1}')
+            unit_hp = f"{unit.get('current_hp', 0)}/{unit.get('hp', 0)}"
+            
+            chk = tk.Checkbutton(scrollable_frame, text=f"{unit_name} (HP: {unit_hp})", 
+                               variable=var, font=("Arial", 10))
+            chk.pack(anchor="w", padx=10, pady=2)
+            
+            # Funktion für max_targets Begrenzung
+            if max_targets:
+                def check_limit(v=var, idx=i):
+                    if v.get():
+                        selected_count = sum(1 for sv in selected_vars if sv.get())
+                        if selected_count > max_targets:
+                            v.set(False)
+                            messagebox.showwarning("Limit erreicht", 
+                                                 f"Maximal {max_targets} Einheiten können ausgewählt werden!")
+                
+                var.trace('w', lambda *args, v=var, idx=i: check_limit(v, idx))
+        
+        scrollable_frame.update_idletasks()
+        canvas.configure(scrollregion=canvas.bbox("all"))
+        
+        # Buttons
+        btn_frame = tk.Frame(selection_window)
+        btn_frame.pack(pady=10)
+        
+        def confirm_selection():
+            selected = []
+            for i, var in enumerate(selected_vars):
+                if var.get():
+                    selected.append(available_units[i])
+            
+            if not selected:
+                messagebox.showwarning("Keine Auswahl", "Mindestens eine Einheit muss ausgewählt werden!")
+                return
+                
+            selected_units.extend(selected)
+            selection_window.destroy()
+        
+        def cancel_selection():
+            selection_window.destroy()
+        
+        tk.Button(btn_frame, text="✓ Bestätigen", bg="#4CAF50", fg="white", 
+                 command=confirm_selection).pack(side="left", padx=10)
+        tk.Button(btn_frame, text="✗ Abbrechen", bg="#f44336", fg="white", 
+                 command=cancel_selection).pack(side="left", padx=10)
+        
+        # Warten auf Auswahl
+        selection_window.wait_window()
+        return selected_units
+
+    def apply_multi_target_effect(self, command_card, selected_units):
+        """Wendet Command Card Effekt auf mehrere Einheiten an"""
+        if not command_card or not selected_units:
+            return
+            
+        card_name = command_card.get('name', 'Unbekannt')
+        effect_text = command_card.get('text', '')
+        
+        # Log der Anwendung
+        log_text = f"Command Card '{card_name}' wird auf {len(selected_units)} Einheiten angewendet:\n\n"
+        
+        for unit in selected_units:
+            unit_name = unit.get('name', 'Unbekannt')
+            log_text += f"🎯 {unit_name}:\n"
+            
+            # Beispiel-Effekte (müssen je nach Card angepasst werden)
+            if 'rally' in effect_text.lower() or 'unterdrückung' in effect_text.lower():
+                # Entferne Unterdrückung
+                current_suppression = unit.get('suppression', 0)
+                if current_suppression > 0:
+                    unit['suppression'] = max(0, current_suppression - 1)
+                    log_text += f"  → Unterdrückung reduziert auf {unit['suppression']}\n"
+                else:
+                    log_text += f"  → Keine Unterdrückung vorhanden\n"
+                    
+            elif 'aim' in effect_text.lower() or 'ziel' in effect_text.lower():
+                # Füge Aim-Token hinzu
+                aim_tokens = unit.get('aim_tokens', 0)
+                unit['aim_tokens'] = aim_tokens + 1
+                log_text += f"  → Ziel-Token hinzugefügt (Total: {unit['aim_tokens']})\n"
+                
+            elif 'move' in effect_text.lower() or 'bewegen' in effect_text.lower():
+                # Zusätzliche Bewegung
+                unit['extra_move'] = unit.get('extra_move', 0) + 1
+                log_text += f"  → Kann sich zusätzlich bewegen (Free Move: {unit['extra_move']})\n"
+                
+            elif 'heal' in effect_text.lower() or 'heilung' in effect_text.lower():
+                # Heilung
+                current_hp = unit.get('current_hp', 0)
+                max_hp = unit.get('hp', 0)
+                if current_hp < max_hp:
+                    unit['current_hp'] = min(max_hp, current_hp + 1)
+                    log_text += f"  → Geheilt auf {unit['current_hp']}/{max_hp} HP\n"
+                else:
+                    log_text += f"  → Bereits bei maximaler Gesundheit\n"
+                    
+            elif 'dodge' in effect_text.lower() or 'ausweichen' in effect_text.lower():
+                # Dodge-Token hinzufügen
+                dodge_tokens = unit.get('dodge_tokens', 0)
+                unit['dodge_tokens'] = dodge_tokens + 1
+                log_text += f"  → Ausweich-Token hinzugefügt (Total: {unit['dodge_tokens']})\n"
+                
+            else:
+                log_text += f"  → Allgemeiner Effekt angewendet\n"
+            
+            log_text += "\n"
+        
+        # Zeige Ergebnis
+        result_window = tk.Toplevel(self.root)
+        result_window.title("Command Card Effekt")
+        result_window.geometry("600x500")
+        result_window.grab_set()
+        
+        tk.Label(result_window, text="Command Card Angewendet!", 
+                font=("Arial", 14, "bold"), fg="green").pack(pady=10)
+        
+        # Scrollbarer Text
+        text_frame = tk.Frame(result_window)
+        text_frame.pack(fill="both", expand=True, padx=20, pady=10)
+        
+        text_widget = tk.Text(text_frame, wrap="word", font=("Arial", 10))
+        scrollbar_result = ttk.Scrollbar(text_frame, orient="vertical", command=text_widget.yview)
+        
+        text_widget.pack(side="left", fill="both", expand=True)
+        scrollbar_result.pack(side="right", fill="y")
+        text_widget.config(yscrollcommand=scrollbar_result.set)
+        
+        text_widget.insert("1.0", log_text)
+        text_widget.config(state="disabled")
+        
+        tk.Button(result_window, text="OK", command=result_window.destroy).pack(pady=10)
+        
+        # Update UI
+        self.update_battle_display()
+
+    def create_hover_tooltip(self, widget, text):
+        """Erstellt ein Hover-Tooltip für ein Widget"""
+        def show_tooltip(event):
+            if self.tooltip_window:
+                self.tooltip_window.destroy()
+            
+            x, y, _, _ = widget.bbox("insert") if hasattr(widget, 'bbox') else (0, 0, 0, 0)
+            x += widget.winfo_rootx() + 20
+            y += widget.winfo_rooty() + 20
+            
+            self.tooltip_window = tk.Toplevel(widget)
+            self.tooltip_window.wm_overrideredirect(True)
+            self.tooltip_window.geometry(f"+{x}+{y}")
+            
+            # Tooltip-Inhalt
+            tooltip_frame = tk.Frame(self.tooltip_window, bg="lightyellow", relief="solid", borderwidth=1)
+            tooltip_frame.pack()
+            
+            tooltip_label = tk.Label(tooltip_frame, text=text, bg="lightyellow", 
+                                   font=("Arial", 9), wraplength=400, justify="left")
+            tooltip_label.pack(padx=5, pady=2)
+            
+            self.current_tooltip_widget = widget
+
+        def hide_tooltip(event):
+            if self.tooltip_window:
+                self.tooltip_window.destroy()
+                self.tooltip_window = None
+            self.current_tooltip_widget = None
+
+        widget.bind("<Enter>", show_tooltip)
+        widget.bind("<Leave>", hide_tooltip)
+        widget.bind("<ButtonPress>", hide_tooltip)  # Verstecke bei Klick
+
+    def format_command_card_tooltip(self, card):
+        """Formatiert Command Card Information für Tooltip"""
+        if not card:
+            return "Keine Karteninformation verfügbar"
+        
+        tooltip_text = f"📜 {card.get('name', 'Unbekannt')}\n"
+        tooltip_text += f"🎯 Pips: {card.get('pips', 'N/A')}\n\n"
+        
+        # Regeltext
+        card_text = card.get('text', '')
+        if card_text and card_text != '-':
+            tooltip_text += f"📖 Effekt:\n{card_text}\n\n"
+        
+        # Multi-Target Hinweis
+        if self.is_multi_target_card(card):
+            tooltip_text += "⚡ Diese Karte kann mehrere Ziele betreffen!"
+        
+        return tooltip_text
+
+    def format_unit_tooltip(self, unit):
+        """Formatiert Einheiten-Information für Tooltip"""
+        if not unit:
+            return "Keine Einheiteninformation verfügbar"
+        
+        tooltip_text = f"🎯 {unit.get('name', 'Unbekannt')}\n"
+        tooltip_text += f"❤️ HP: {unit.get('current_hp', 0)}/{unit.get('hp', 0)}\n"
+        tooltip_text += f"⚔️ Mut: {unit.get('courage', 'N/A')}\n"
+        tooltip_text += f"🛡️ Deckung: {unit.get('cover', 'N/A')}\n"
+        tooltip_text += f"🏃 Speed: {unit.get('speed', 'N/A')}\n"
+        
+        # Status-Effekte
+        suppression = unit.get('suppression', 0)
+        if suppression > 0:
+            tooltip_text += f"💨 Unterdrückung: {suppression}\n"
+        
+        aim_tokens = unit.get('aim_tokens', 0)
+        if aim_tokens > 0:
+            tooltip_text += f"🎯 Ziel-Token: {aim_tokens}\n"
+        
+        dodge_tokens = unit.get('dodge_tokens', 0)
+        if dodge_tokens > 0:
+            tooltip_text += f"🛡️ Ausweich-Token: {dodge_tokens}\n"
+        
+        # Aktivierungsstatus
+        if unit.get('activated', False):
+            tooltip_text += "✅ Bereits aktiviert"
+        else:
+            tooltip_text += "⭕ Noch nicht aktiviert"
+        
+        return tooltip_text
+
+    def format_upgrade_tooltip(self, upgrade):
+        """Formatiert Ausrüstungs-Information für Tooltip"""
+        if not upgrade:
+            return "Keine Ausrüstungsinformation verfügbar"
+        
+        tooltip_text = f"🎒 {upgrade.get('name', 'Unbekannt')}\n"
+        tooltip_text += f"💰 Kosten: {upgrade.get('points', 'N/A')} Punkte\n"
+        tooltip_text += f"🔧 Slot: {upgrade.get('slot', 'N/A')}\n\n"
+        
+        # Regeltext
+        upgrade_text = upgrade.get('text', '')
+        if upgrade_text:
+            tooltip_text += f"📖 Effekt:\n{upgrade_text}\n"
+        
+        # Schlüsselwörter
+        keywords = upgrade.get('keywords', [])
+        if keywords:
+            tooltip_text += f"⭐ Keywords: {', '.join(keywords)}\n"
+        
+        return tooltip_text
 
         f_res = tk.Frame(self.frame_center)
         f_res.pack(fill="x", pady=10)
