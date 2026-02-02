@@ -155,8 +155,464 @@ class GameCompanion:
         tree.column("Minis", width=30, anchor="center")
         tree.column("HP", width=40, anchor="center")
         tree.column("Status", width=60)
+        
+        # Event-Handler für Einheit-Auswahl hinzufügen
+        tree.bind("<<TreeviewSelect>>", lambda e: self.on_unit_select(tree, e))
+        
         tree.pack(fill="both", expand=True)
         return tree
+
+    def on_unit_select(self, tree, event):
+        """Handler für Einheit-Auswahl - zeigt Effekte und Fähigkeiten an"""
+        selection = tree.selection()
+        if not selection:
+            return
+            
+        # Ermittle welcher Tree ausgewählt wurde
+        is_player_tree = (tree == self.tree_player)
+        
+        # Hole das Item und finde die entsprechende Einheit
+        item_id = selection[0]
+        item_values = tree.item(item_id, 'values')
+        unit_name = item_values[0] if item_values else ""
+        
+        # Finde die Einheit in der entsprechenden Armee
+        target_army = self.player_army if is_player_tree else self.opponent_army
+        selected_unit = None
+        
+        for unit in target_army.get("units", []):
+            if unit.get("name") == unit_name:
+                selected_unit = unit
+                break
+                
+        if selected_unit:
+            self.show_unit_effects(selected_unit, is_player_tree)
+
+    def show_unit_effects(self, unit, is_player):
+        """Zeigt ein Fenster mit allen Effekten und Fähigkeiten der Einheit"""
+        effects_window = tk.Toplevel(self.root)
+        effects_window.title(f"Effekte: {unit.get('name', 'Unbekannt')}")
+        effects_window.geometry("500x600")
+        effects_window.resizable(True, True)
+        
+        # Scrollbarer Frame
+        canvas = tk.Canvas(effects_window)
+        scrollbar = ttk.Scrollbar(effects_window, orient="vertical", command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas)
+        
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        # Header mit Einheit-Info
+        header_frame = tk.Frame(scrollable_frame, bg="#2196F3", pady=10)
+        header_frame.pack(fill="x", padx=5, pady=5)
+        
+        tk.Label(header_frame, text=unit.get('name', 'Unbekannt'), 
+                font=("Arial", 16, "bold"), fg="white", bg="#2196F3").pack()
+        
+        side_text = "Spieler" if is_player else "Gegner (AI)"
+        tk.Label(header_frame, text=f"Seite: {side_text}", 
+                font=("Arial", 12), fg="white", bg="#2196F3").pack()
+        
+        # Basis-Stats Frame
+        stats_frame = tk.LabelFrame(scrollable_frame, text="📊 Basis-Statistiken", font=("Arial", 12, "bold"))
+        stats_frame.pack(fill="x", padx=10, pady=5)
+        
+        stats_text = f"""
+🎯 Geschwindigkeit: {unit.get('speed', 'N/A')}
+❤️ Lebenspunkte: {unit.get('current_hp', 'N/A')}/{unit.get('hp', 'N/A')}
+👥 Miniaturen: {unit.get('minis', 'N/A')}
+🛡️ Deckung: {unit.get('cover', 'N/A')}
+⚔️ Mut: {unit.get('courage', 'N/A')}
+💨 Unterdrückung: {unit.get('suppression', 0)}
+🔸 Aktiviert: {'Ja' if unit.get('activated', False) else 'Nein'}
+        """
+        
+        tk.Label(stats_frame, text=stats_text, font=("Arial", 10), justify="left").pack(anchor="w", padx=10, pady=5)
+        
+        # Schlüsselwörter/Fähigkeiten Frame
+        keywords_frame = tk.LabelFrame(scrollable_frame, text="⭐ Fähigkeiten & Schlüsselwörter", font=("Arial", 12, "bold"))
+        keywords_frame.pack(fill="x", padx=10, pady=5)
+        
+        keywords = unit.get('keywords', [])
+        if keywords:
+            for keyword in keywords:
+                keyword_text = f"• {keyword}"
+                # Beschreibung für bekannte Schlüsselwörter hinzufügen
+                desc = self.get_keyword_description(keyword)
+                if desc:
+                    keyword_text += f"\n  → {desc}"
+                
+                tk.Label(keywords_frame, text=keyword_text, font=("Arial", 10), 
+                        justify="left", wraplength=450).pack(anchor="w", padx=10, pady=2)
+        else:
+            tk.Label(keywords_frame, text="Keine besonderen Fähigkeiten", 
+                    font=("Arial", 10), style="italic").pack(anchor="w", padx=10, pady=5)
+        
+        # Waffen Frame
+        weapons_frame = tk.LabelFrame(scrollable_frame, text="⚔️ Waffen & Angriffe", font=("Arial", 12, "bold"))
+        weapons_frame.pack(fill="x", padx=10, pady=5)
+        
+        weapons = unit.get('weapons', [])
+        if weapons:
+            for weapon in weapons:
+                weapon_name = weapon.get('name', 'Unbekannte Waffe')
+                weapon_range = weapon.get('range', 'N/A')
+                weapon_dice = weapon.get('dice', 'N/A')
+                weapon_keywords = weapon.get('keywords', [])
+                
+                weapon_text = f"🔫 {weapon_name}\n"
+                weapon_text += f"   Reichweite: {weapon_range}\n"
+                weapon_text += f"   Würfel: {weapon_dice}\n"
+                
+                if weapon_keywords:
+                    weapon_text += f"   Eigenschaften: {', '.join(weapon_keywords)}\n"
+                    
+                tk.Label(weapons_frame, text=weapon_text, font=("Arial", 10), 
+                        justify="left", bg="#f5f5f5").pack(fill="x", padx=10, pady=3)
+        else:
+            tk.Label(weapons_frame, text="Keine Waffen verfügbar", 
+                    font=("Arial", 10)).pack(anchor="w", padx=10, pady=5)
+        
+        # Ausrüstung/Upgrades Frame  
+        upgrades_frame = tk.LabelFrame(scrollable_frame, text="🎒 Ausrüstung & Upgrades", font=("Arial", 12, "bold"))
+        upgrades_frame.pack(fill="x", padx=10, pady=5)
+        
+        upgrades = unit.get('upgrades', [])
+        if upgrades:
+            for upgrade in upgrades:
+                # Upgrade kann string "Name (Punkte)" oder dict sein
+                if isinstance(upgrade, str):
+                    upgrade_text = f"• {upgrade}"
+                    # Versuche Effekt-Beschreibung zu finden
+                    upgrade_name = upgrade.split(' (')[0] if '(' in upgrade else upgrade
+                    desc = self.get_upgrade_description(upgrade_name)
+                    if desc:
+                        upgrade_text += f"\n  → {desc}"
+                else:
+                    upgrade_text = f"• {upgrade.get('name', 'Unbekannt')}"
+                    if upgrade.get('effect'):
+                        upgrade_text += f"\n  → {upgrade['effect']}"
+                        
+                tk.Label(upgrades_frame, text=upgrade_text, font=("Arial", 10), 
+                        justify="left", wraplength=450).pack(anchor="w", padx=10, pady=2)
+        else:
+            tk.Label(upgrades_frame, text="Keine Ausrüstung ausgewählt", 
+                    font=("Arial", 10)).pack(anchor="w", padx=10, pady=5)
+        
+        # Status-Effekte Frame
+        status_frame = tk.LabelFrame(scrollable_frame, text="🎭 Aktuelle Status-Effekte", font=("Arial", 12, "bold"))
+        status_frame.pack(fill="x", padx=10, pady=5)
+        
+        status_effects = []
+        
+        # Marker-basierte Effekte
+        if unit.get('markers'):
+            for marker_type, count in unit['markers'].items():
+                if count > 0:
+                    effect_desc = self.get_marker_effect_description(marker_type)
+                    status_effects.append(f"• {marker_type} ({count}x): {effect_desc}")
+        
+        # Weitere Statuseffekte
+        if unit.get('suppression', 0) > 0:
+            suppression = unit['suppression']
+            courage = unit.get('courage', 2)
+            if suppression >= courage * 2:
+                status_effects.append("• Panisch: Kann nicht angreifen, nur Rally oder Bewegen")
+            elif suppression >= courage:
+                status_effects.append("• Unterdrückt: -1 Angriffs-Würfel")
+            else:
+                status_effects.append(f"• Unterdrückung: {suppression} (Keine Auswirkung)")
+                
+        if unit.get('activated', False):
+            status_effects.append("• Aktiviert: Hat diese Runde bereits gehandelt")
+            
+        if status_effects:
+            for effect in status_effects:
+                tk.Label(status_frame, text=effect, font=("Arial", 10), 
+                        justify="left", wraplength=450).pack(anchor="w", padx=10, pady=2)
+        else:
+            tk.Label(status_frame, text="Keine aktiven Status-Effekte", 
+                    font=("Arial", 10)).pack(anchor="w", padx=10, pady=5)
+        
+        # Schließen Button
+        close_button = tk.Button(scrollable_frame, text="Schließen", 
+                               command=effects_window.destroy, 
+                               bg="#f44336", fg="white", font=("Arial", 12))
+        close_button.pack(pady=20)
+        
+        # Pack scrolling components
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        
+        # Center window on parent
+        effects_window.transient(self.root)
+        effects_window.grab_set()
+
+    def get_keyword_description(self, keyword):
+        """Gibt Beschreibung für bekannte Schlüsselwörter zurück"""
+        descriptions = {
+            "Armor": "Reduziert Treffer um 1 (außer bei kritischen Treffern)",
+            "Armor X": "Reduziert Treffer um X (außer bei kritischen Treffern)", 
+            "Arsenal X": "Kann bis zu X verschiedene Waffen pro Angriff verwenden",
+            "Charge": "+1 Angriffs-Würfel bei Nahkampf nach Bewegung",
+            "Climbing Gear": "Kann vertikale Oberflächen überqueren",
+            "Danger Sense X": "Kann Deckung ignorieren bis Reichweite X",
+            "Deflect": "Kann Schüsse auf Nahbereich-Ziele umleiten",
+            "Disciplined X": "Entfernt X Unterdrückungs-Token bei Rally",
+            "Duelist": "Angriffs-Würfel können nicht durch Deckung reduziert werden",
+            "Exemplar": "Andere Einheiten im Bereich erhalten +1 Mut",
+            "Expert Climber": "Ignoriert Bewegungsstrafen durch Gelände",
+            "Fast": "Kann 1 kostenlosen Speed-1-Zug nach Aktion ausführen",
+            "Fire Support": "Kann Angriff einer anderen Einheit unterstützen", 
+            "Guardian X": "Kann Deckungsschuss für Einheiten in Reichweite X geben",
+            "Immune: Pierce": "Pierce-Angriffe ignorieren Armor nicht",
+            "Immune: Range 1 Weapons": "Immun gegen Angriffe in Reichweite 1",
+            "Impact X": "Ändert X Treffer in kritische Treffer gegen Fahrzeuge",
+            "Jump X": "Kann über Gelände bis Höhe X springen",
+            "Low Profile": "Kann Deckung für Einheiten hinter sich bieten",
+            "Marksman": "Präzisionsschüsse: Kann Ziele hinter Deckung treffen",
+            "Nimble": "Kann Ausweich-Aktion nach Bewegung durchführen",
+            "Pierce X": "Angriffe ignorieren X Armor",
+            "Precise X": "Kann bis zu X Angriffswürfel neu werfen",
+            "Relentless": "Kann nach Rally sofort einen Speed-1-Zug machen",
+            "Scout X": "Kann nach Aufstellung X Speed-1-Züge machen",
+            "Sharpshooter X": "Reduziert Deckungs-Bonus um X",
+            "Steady": "Kann Zielen-Aktion nach Angriff durchführen",
+            "Tactical X": "Kann X Command-Cards bei Taktikphase ziehen",
+            "Uncanny Luck X": "Kann X Verteidigungswürfel neu werfen",
+            "Weak Point X": "Angriffe gegen Fahrzeuge erhalten Pierce X"
+        }
+        return descriptions.get(keyword, "")
+
+    def get_upgrade_description(self, upgrade_name):
+        """Gibt Beschreibung für bekannte Upgrades zurück"""
+        descriptions = {
+            "DLT-19D": "Reichweite 1-4, 4 Würfel, Pierce 1",
+            "Z-6 Rotary Blaster": "Reichweite 1-3, 6 Würfel", 
+            "HH-12 Stormtrooper": "Reichweite 1-4, 4 Würfel, Pierce 1, Cumbersome",
+            "MPL-57 Ion Blaster": "Reichweite 1-2, 4 Würfel, Ion 1",
+            "Emergency Stims": "1x pro Spiel: Stelle 2 HP wieder her",
+            "Bacta Capsules": "1x pro Spiel: Stelle 1 HP wieder her",
+            "Targeting Scopes": "+1 Präzisionswürfel bei Zielen-Aktion",
+            "Grappling Hooks": "Erhalte Expert Climber",
+            "Electrobinoculars": "Spotte-Aktion: Gib einer Einheit Aim-Token",
+            "Recon Intel": "Scout 1 nach Aufstellung",
+            "Comms Jammer": "Feindliche Einheiten in Reichweite 1 erhalten -1 auf Command-Würfe",
+            "Long-Range Comlink": "Kann Kommando von jeder Reichweite erhalten",
+            "Frag Grenades": "Bereich-Angriff, Reichweite 1",
+            "Impact Grenades": "Bereich-Angriff, Impact 1",
+            "Concussion Grenades": "Bereich-Angriff, Blast, Suppressive"
+        }
+        return descriptions.get(upgrade_name, "")
+
+    def get_marker_effect_description(self, marker_type):
+        """Gibt Beschreibung für Marker-Effekte zurück"""
+        descriptions = {
+            "aim": "🎯 +1 Angriffs-Würfel und kann Würfel neu werfen",
+            "dodge": "🛡️ +1 Verteidigungs-Würfel und kann Würfel neu werfen", 
+            "suppression": "💨 Bei Courage-Wert: -1 Angriff, bei 2x Courage: Panik",
+            "standby": "⏸️ Kann Aktion als Reaktion auf Gegner-Bewegung ausführen",
+            "immobilized": "🚫 Kann sich nicht bewegen",
+            "poisoned": "☠️ Erleidet Schaden am Ende jeder Runde", 
+            "wounded": "🩸 Reduzierte Kampffähigkeit",
+            "vehicle_damage": "🔥 Fahrzeug-Schadenspunkt"
+        }
+        return descriptions.get(marker_type, "Unbekannter Effekt")
+
+    def has_usable_equipment(self, unit):
+        """Prüft ob die Einheit nutzbare Ausrüstung hat"""
+        if not unit or not unit.get('upgrades'):
+            return False
+            
+        usable_equipment = [
+            "Emergency Stims", "Bacta Capsules", "Electrobinoculars",
+            "Frag Grenades", "Impact Grenades", "Concussion Grenades",
+            "Smoke Grenades", "Thermal Detonators", "Comms Jammer"
+        ]
+        
+        for upgrade in unit.get('upgrades', []):
+            upgrade_name = upgrade.split(' (')[0] if isinstance(upgrade, str) else upgrade.get('name', '')
+            if any(eq in upgrade_name for eq in usable_equipment):
+                return True
+        return False
+
+    def use_equipment(self):
+        """Zeigt Dialog zur Ausrüstungsnutzung"""
+        if not self.active_unit:
+            return
+            
+        equipment_window = tk.Toplevel(self.root)
+        equipment_window.title("Ausrüstung nutzen")
+        equipment_window.geometry("400x300")
+        
+        tk.Label(equipment_window, text="Verfügbare Ausrüstung", 
+                font=("Arial", 14, "bold")).pack(pady=10)
+        
+        # Finde nutzbare Ausrüstung
+        usable_items = []
+        for upgrade in self.active_unit.get('upgrades', []):
+            upgrade_name = upgrade.split(' (')[0] if isinstance(upgrade, str) else upgrade.get('name', '')
+            
+            # Check if already used (simplified - would need tracking)
+            usable_items.append(upgrade_name)
+        
+        for item in usable_items:
+            btn = tk.Button(equipment_window, text=f"Nutze: {item}",
+                          command=lambda i=item: self.activate_equipment(i),
+                          font=("Arial", 10), width=25, pady=3)
+            btn.pack(pady=2)
+        
+        tk.Button(equipment_window, text="Abbrechen", 
+                 command=equipment_window.destroy,
+                 bg="#f44336", fg="white").pack(pady=20)
+
+    def activate_equipment(self, equipment_name):
+        """Aktiviert ein Ausrüstungsgegenstand"""
+        unit_name = self.active_unit.get("name", "Unbekannt")
+        
+        effects = {
+            "Emergency Stims": "Stelle 2 HP wieder her",
+            "Bacta Capsules": "Stelle 1 HP wieder her", 
+            "Electrobinoculars": "Gib einer verbündeten Einheit einen Aim-Token",
+            "Frag Grenades": "Bereich-Schaden in Reichweite 1",
+            "Comms Jammer": "Störe feindliche Kommunikation"
+        }
+        
+        effect = effects.get(equipment_name, "Unbekannter Effekt")
+        
+        messagebox.showinfo("Ausrüstung aktiviert", 
+                          f"{unit_name} nutzt: {equipment_name}\n\nEffekt: {effect}")
+        
+        # Heile wenn Stims oder Bacta
+        if "Stims" in equipment_name:
+            current_hp = self.active_unit.get("current_hp", 0)
+            max_hp = self.active_unit.get("hp", 0)
+            self.active_unit["current_hp"] = min(max_hp, current_hp + 2)
+        elif "Bacta" in equipment_name:
+            current_hp = self.active_unit.get("current_hp", 0)
+            max_hp = self.active_unit.get("hp", 0)
+            self.active_unit["current_hp"] = min(max_hp, current_hp + 1)
+        
+        # Schließe Fenster
+        for widget in self.root.winfo_children():
+            if isinstance(widget, tk.Toplevel) and "Ausrüstung" in widget.title():
+                widget.destroy()
+                break
+
+    def get_melee_targets(self):
+        """Findet alle Einheiten in Nahkampf-Reichweite (simuliert)"""
+        targets = []
+        
+        # Simuliere Ziele basierend auf Gegner-Armee
+        enemy_army = self.opponent_army if self.active_side == "Player" else self.player_army
+        
+        for unit in enemy_army.get("units", []):
+            if unit.get("current_hp", 0) > 0:  # Nur lebende Einheiten
+                # Simuliere dass einige Einheiten in Reichweite sind
+                if random.random() < 0.4:  # 40% Chance in Nahkampf-Reichweite
+                    targets.append(unit.get("name", "Unbekannt"))
+        
+        return targets
+
+    def execute_melee_attack(self, target_name):
+        """Führt Nahkampf-Angriff aus"""
+        if not self.active_unit:
+            return
+            
+        attacker = self.active_unit
+        attacker_name = attacker.get("name", "Unbekannt")
+        attacker_minis = attacker.get("minis", 1)
+        
+        # Finde Ziel-Einheit
+        enemy_army = self.opponent_army if self.active_side == "Player" else self.player_army
+        target_unit = None
+        
+        for unit in enemy_army.get("units", []):
+            if unit.get("name") == target_name:
+                target_unit = unit
+                break
+        
+        if not target_unit:
+            messagebox.showerror("Fehler", "Ziel nicht gefunden!")
+            return
+            
+        target_minis = target_unit.get("minis", 1)
+        
+        # Berechne Angriffs-Würfel (Basis = Anzahl Miniaturen)
+        attack_dice = attacker_minis
+        
+        # Bonus wenn mehr Minis als Gegner
+        if attacker_minis > target_minis:
+            attack_dice += 1
+            
+        # Würfle für Angriff
+        hits = 0
+        for _ in range(attack_dice):
+            if random.randint(1, 8) >= 4:  # 4+ zum Treffen
+                hits += 1
+        
+        # Verteidigung
+        defense_dice = target_minis
+        blocks = 0
+        for _ in range(defense_dice):
+            if random.randint(1, 8) >= 5:  # 5+ zum Blocken  
+                blocks += 1
+        
+        # Schaden berechnen
+        damage = max(0, hits - blocks)
+        
+        # Schaden anwenden (vereinfacht)
+        old_hp = target_unit.get("current_hp", 0)
+        new_hp = max(0, old_hp - damage)
+        target_unit["current_hp"] = new_hp
+        
+        # Figuren entfernen bei HP-Verlust
+        if damage > 0:
+            self.apply_figure_damage(target_unit, damage)
+        
+        # Zurückschlag (falls Ziel noch lebt)
+        counter_damage = 0
+        if new_hp > 0:
+            counter_dice = target_unit.get("minis", 1)
+            counter_hits = sum(1 for _ in range(counter_dice) if random.randint(1, 8) >= 5)
+            counter_blocks = sum(1 for _ in range(attacker_minis) if random.randint(1, 8) >= 5)
+            counter_damage = max(0, counter_hits - counter_blocks)
+            
+            if counter_damage > 0:
+                attacker_old_hp = attacker.get("current_hp", 0)
+                attacker["current_hp"] = max(0, attacker_old_hp - counter_damage)
+                self.apply_figure_damage(attacker, counter_damage)
+        
+        # Ergebnis anzeigen
+        result_text = f"Nahkampf: {attacker_name} vs {target_name}\n\n"
+        result_text += f"Angriff: {attack_dice} Würfel → {hits} Treffer\n"
+        result_text += f"Verteidigung: {defense_dice} Würfel → {blocks} Blocks\n"
+        result_text += f"Schaden an {target_name}: {damage}\n"
+        
+        if counter_damage > 0:
+            result_text += f"\nZurückschlag: {counter_damage} Schaden an {attacker_name}"
+        
+        messagebox.showinfo("Nahkampf-Ergebnis", result_text)
+        
+        # Trees aktualisieren
+        self.update_tree(self.tree_player, self.player_army["units"])
+        self.update_tree(self.tree_opponent, self.opponent_army["units"])
+
+    def show_explosion_effect(self):
+        """Zeigt Explosions-Effekt"""
+        messagebox.showinfo("Explosion!", 
+                          "BOOM! 💥\n\nExplosion verursacht Bereich-Schaden!\n(Details würden basierend auf Missionsziel implementiert)")
+
+    def show_repair_effect(self):
+        """Zeigt Reparatur-Effekt"""
+        messagebox.showinfo("Reparatur", 
+                          "🔧 Reparatur erfolgreich!\n\nObjekt/Fahrzeug wurde repariert.")
 
     def load_army(self, is_player):
         # Determine initial directory based on mission or base folder
@@ -422,21 +878,45 @@ class GameCompanion:
         deck_frame = tk.Frame(self.frame_center, bg="#fafafa")
         deck_frame.pack(pady=10)
 
-        self.lbl_setup_status = tk.Label(deck_frame, text="Bitte wähle deine Kommandokarten (Hand von 7 Karten).", font=("Segoe UI", 12), bg="#fafafa")
+        self.lbl_setup_status = tk.Label(deck_frame, text="Überprüfe Kommandokarten...", font=("Segoe UI", 12), bg="#fafafa")
         self.lbl_setup_status.pack()
 
         pre_loaded_cards = self.player_army.get("command_cards", [])
 
-        if pre_loaded_cards and len(pre_loaded_cards) == 7:
-            self.lbl_setup_status.config(text="Kommandokarten aus Armeeliste geladen (7 Karten).", fg="green")
-            self.player_hand = pre_loaded_cards
+        # NUR fragen wenn KEINE Karten hinterlegt sind
+        if pre_loaded_cards and len(pre_loaded_cards) >= 7:
+            # Nehme die ersten 7 Karten falls mehr vorhanden
+            self.player_hand = pre_loaded_cards[:7]
+            self.lbl_setup_status.config(text=f"✅ Kommandokarten aus Armeeliste geladen ({len(self.player_hand)} Karten).", fg="green")
 
             # Ready Button
             self.btn_finish_setup = tk.Button(self.frame_center, text="Spiel starten", command=self.finish_setup, bg="#4CAF50", fg="white", font=("Segoe UI", 14, "bold"))
             self.btn_finish_setup.pack(pady=20)
 
+        elif pre_loaded_cards and len(pre_loaded_cards) > 0:
+            # Teilweise Karten vorhanden - nutze diese und fülle auf 7 auf
+            missing_count = 7 - len(pre_loaded_cards)
+            self.player_hand = pre_loaded_cards[:]
+            
+            # Fülle mit Standard-Karten auf
+            standard_cards = ["Standing Orders", "Push", "Ambush", "Assault", "Coordinated Bombardment", "Master of Evil", "Return of the Jedi"]
+            for card in standard_cards:
+                if len(self.player_hand) >= 7:
+                    break
+                if card not in self.player_hand:
+                    self.player_hand.append(card)
+            
+            # Kürze auf 7 falls mehr vorhanden
+            self.player_hand = self.player_hand[:7]
+            self.lbl_setup_status.config(text=f"✅ Karten aus Armeeliste vervollständigt ({len(self.player_hand)} Karten).", fg="green")
+            
+            # Ready Button
+            self.btn_finish_setup = tk.Button(self.frame_center, text="Spiel starten", command=self.finish_setup, bg="#4CAF50", fg="white", font=("Segoe UI", 14, "bold"))
+            self.btn_finish_setup.pack(pady=20)
+
         else:
-            # Legacy / Manual
+            # KEINE Karten hinterlegt - frage den Spieler
+            self.lbl_setup_status.config(text="❗ Keine Kommandokarten in Armeeliste gefunden. Bitte wählen.", fg="red")
             btn_deck = tk.Button(self.frame_center, text="Kommandokarten wählen", command=self.open_deck_builder, bg="#2196F3", fg="white", font=("Segoe UI", 12))
             btn_deck.pack(pady=20)
 
@@ -837,8 +1317,16 @@ class GameCompanion:
         self.create_order_pool()
         self.start_activation_phase()
 
+    def take_manual_control(self):
+        """Übernehme manuell die Kontrolle über AI-Einheit"""
+        if self.active_side == "Opponent":
+            # AI temporär deaktivieren für diese Aktivierung
+            self.manual_override = True
+            messagebox.showinfo("Manuelle Kontrolle", f"Du übernimmst manuell die Kontrolle über {self.active_unit['name']}")
+            # UI aktualisieren
+            self.update_actions_ui()
+
     def select_opponent_orders(self):
-        """Lasse Spieler 2 seine Befehle auswählen"""
         pips = self.current_command_card["opponent"].get("pips", 4)
         orders_count = 3 if pips == 3 else (2 if pips == 2 else 1)
         
@@ -1155,7 +1643,7 @@ class GameCompanion:
         f_acts = tk.Frame(self.frame_center)
         f_acts.pack(pady=10)
 
-        if (self.active_side == "Player" or (self.active_side == "Opponent" and not self.ai_enabled.get())) and not self.is_panicked and self.actions_remaining > 0:
+        if (self.active_side == "Player" or (self.active_side == "Opponent" and not self.ai_enabled.get()) or getattr(self, 'manual_override', False)) and not self.is_panicked and self.actions_remaining > 0:
             btn_cfg = {"font": ("Segoe UI", 10), "width": 15, "bg": "#2196F3", "fg": "white"}
 
             if self.active_side == "Opponent":
@@ -1170,14 +1658,21 @@ class GameCompanion:
             tk.Button(f_acts, text="Ausweichen (Dodge)", command=lambda: self.perform_action("Dodge"), **btn_cfg).grid(row=start_row+1, column=1, padx=5, pady=5)
             tk.Button(f_acts, text="Bereitschaft", command=lambda: self.perform_action("Standby"), **btn_cfg).grid(row=start_row+2, column=0, padx=5, pady=5)
             tk.Button(f_acts, text="Erholung", command=lambda: self.perform_action("Recover"), **btn_cfg).grid(row=start_row+2, column=1, padx=5, pady=5)
+            tk.Button(f_acts, text="Interaktion", command=lambda: self.perform_action("Interact"), bg="#795548", fg="white", font=("Segoe UI", 10), width=15).grid(row=start_row+3, column=0, padx=5, pady=5)
+            tk.Button(f_acts, text="Nahkampf", command=lambda: self.perform_action("Melee"), bg="#8D6E63", fg="white", font=("Segoe UI", 10), width=15).grid(row=start_row+3, column=1, padx=5, pady=5)
 
             # Pass Button für einzelne Einheit
-            tk.Button(f_acts, text="Einheit Passen", command=self.pass_current_unit, bg="#FF9800", fg="white", font=("bold")).grid(row=start_row+3, column=0, padx=5, pady=5)
-            tk.Button(f_acts, text="Aktivierung Beenden", command=self.end_activation, bg="#F44336", fg="white", font=("bold")).grid(row=start_row+3, column=1, padx=5, pady=5)
+            tk.Button(f_acts, text="Einheit Passen", command=self.pass_current_unit, bg="#FF9800", fg="white", font=("bold")).grid(row=start_row+4, column=0, padx=5, pady=5)
+            tk.Button(f_acts, text="Aktivierung Beenden", command=self.end_activation, bg="#F44336", fg="white", font=("bold")).grid(row=start_row+4, column=1, padx=5, pady=5)
 
-        elif (self.active_side == "Player" or (self.active_side == "Opponent" and not self.ai_enabled.get())) and (self.is_panicked or self.actions_remaining <= 0):
+        elif (self.active_side == "Player" or (self.active_side == "Opponent" and not self.ai_enabled.get()) or getattr(self, 'manual_override', False)) and (self.is_panicked or self.actions_remaining <= 0):
              tk.Button(f_acts, text="Einheit Passen", command=self.pass_current_unit, bg="#FF9800", fg="white", font=("bold")).pack(pady=5)
              tk.Button(f_acts, text="Aktivierung Beenden", command=self.end_activation, bg="#F44336", fg="white", font=("bold")).pack()
+        elif self.active_side == "Opponent" and self.ai_enabled.get():
+            # AI ist aktiv - zeige Status
+            tk.Label(f_acts, text="🤖 AI denkt nach...", font=("Segoe UI", 14, "bold"), fg="blue").pack(pady=20)
+            tk.Button(f_acts, text="AI Überspringen (Manuell übernehmen)", 
+                     command=self.take_manual_control, bg="#FF5722", fg="white").pack(pady=10)
 
     def perform_action(self, action_type):
         if self.actions_remaining <= 0 or not self.active_unit: 
@@ -1201,6 +1696,15 @@ class GameCompanion:
         elif action_type == "Dodge":
             self.active_unit["dodge"] = self.active_unit.get("dodge", 0) + 1
             messagebox.showinfo("Ausweichen", f"{self.active_unit['name']} erhält 1 Ausweichmarker.\nGesamt: 💨{self.active_unit['dodge']}")
+        elif action_type == "Interact":
+            # Neue Interaktions-Aktion
+            self.open_interaction_dialog()
+            return # Don't decrement yet, wait for dialog
+        elif action_type == "Melee":
+            # Nahkampf-Aktion
+            self.open_melee_dialog()
+            return # Don't decrement yet, wait for dialog
+            return # Don't decrement yet, wait for dialog
         elif action_type == "Standby":
             # Bereitschafts-Mechanik: Einheit kann später reagieren
             self.active_unit["standby"] = True
@@ -1254,6 +1758,10 @@ class GameCompanion:
         self.check_and_continue_turn()
     
     def end_activation(self):
+        # Reset manual override
+        if hasattr(self, 'manual_override'):
+            del self.manual_override
+            
         # End effects
         if self.is_panicked:
             # Remove suppression = courage
@@ -1302,9 +1810,191 @@ class GameCompanion:
             
             # Continue with next turn
             self.start_turn()
+    
+    def open_interaction_dialog(self):
+        """Dialog für Interaktions-Aktionen (Bomben, Objekte, etc.)"""
+        top = tk.Toplevel(self.root)
+        top.title("Interaktion")
+        top.geometry("400x500")
+        
+        tk.Label(top, text=f"{self.active_unit['name']} - Interaktion", font=("Segoe UI", 14, "bold")).pack(pady=10)
+        
+        # Interaktionsoptionen
+        options_frame = tk.Frame(top)
+        options_frame.pack(fill="both", expand=True, padx=20, pady=20)
+        
+        tk.Label(options_frame, text="Wähle Interaktionstyp:", font=("Segoe UI", 12, "bold")).pack(pady=5)
+        
+        interaction_var = tk.StringVar(value="activate")
+        
+        # Verschiedene Interaktionstypen
+        interactions = [
+            ("activate", "🟢 Objekt aktivieren (Bomben, Terminals, etc.)"),
+            ("deactivate", "🔴 Objekt deaktivieren (Sicherheitssysteme, etc.)"),
+            ("claim", "🏴 Missionsziel beanspruchen"),
+            ("repair", "🔧 Reparieren (Fahrzeuge, Ausrüstung)"),
+            ("hack", "💻 Hacken (Computer, Droiden)"),
+            ("search", "🔍 Durchsuchen (Container, Gebäude)"),
+            ("use_equipment", "🎒 Ausrüstung benutzen")
+        ]
+        
+        for value, text in interactions:
+            tk.Radiobutton(options_frame, text=text, variable=interaction_var, value=value, 
+                          font=("Segoe UI", 10), anchor="w").pack(fill="x", pady=2)
+        
+        # Zusätzliche Details
+        details_frame = tk.Frame(top)
+        details_frame.pack(fill="x", padx=20, pady=10)
+        
+        tk.Label(details_frame, text="Beschreibung (optional):", font=("Segoe UI", 10)).pack(anchor="w")
+        details_entry = tk.Entry(details_frame, width=50)
+        details_entry.pack(fill="x", pady=5)
+        
+        # Buttons
+        button_frame = tk.Frame(top)
+        button_frame.pack(pady=20)
+        
+        def execute_interaction():
+            interaction_type = interaction_var.get()
+            details = details_entry.get().strip()
+            
+            # Führe Interaktion durch
+            interaction_names = {
+                "activate": "Aktivierung",
+                "deactivate": "Deaktivierung", 
+                "claim": "Beanspruchung",
+                "repair": "Reparatur",
+                "hack": "Hack",
+                "search": "Durchsuchung",
+                "use_equipment": "Ausrüstung"
+            }
+            
+            name = interaction_names.get(interaction_type, "Interaktion")
+            message = f"{self.active_unit['name']} führt {name} durch."
+            if details:
+                message += f"\n\n📝 Details: {details}"
+            
+            # Spezielle Effekte je nach Typ
+            if interaction_type == "claim":
+                message += "\n\n🏴 Missionsziel beansprucht! Überprüfe Siegbedingungen."
+            elif interaction_type == "hack":
+                message += "\n\n💻 Hack erfolgreich! Ziel unter deiner Kontrolle."
+            elif interaction_type == "repair":
+                message += "\n\n🔧 Reparatur abgeschlossen! Ziel wieder funktionsfähig."
+            elif interaction_type == "use_equipment":
+                self.open_equipment_dialog()
+                top.destroy()
+                return
+            
+            top.destroy()
+            self.actions_remaining -= 1
+            self.update_actions_ui()
+            messagebox.showinfo("Interaktion", message)
+        
+        tk.Button(button_frame, text="INTERAKTION AUSFÜHREN", command=execute_interaction, 
+                 bg="#4CAF50", fg="white", font=("Segoe UI", 12, "bold")).pack(side="left", padx=5)
+        tk.Button(button_frame, text="Abbrechen", command=top.destroy, 
+                 bg="#9E9E9E", fg="white").pack(side="left", padx=5)
+    
+    def open_equipment_dialog(self):
+        """Dialog für Ausrüstungsnutzung"""
+        top = tk.Toplevel(self.root)
+        top.title("Ausrüstung benutzen")
+        top.geometry("500x600")
+        
+        tk.Label(top, text=f"{self.active_unit['name']} - Ausrüstung", font=("Segoe UI", 14, "bold")).pack(pady=10)
+        
+        # Verfügbare Ausrüstung anzeigen
+        equipment_frame = tk.Frame(top)
+        equipment_frame.pack(fill="both", expand=True, padx=20, pady=20)
+        
+        tk.Label(equipment_frame, text="Verfügbare Ausrüstung:", font=("Segoe UI", 12, "bold")).pack(pady=5)
+        
+        # Equipment aus Upgrades extrahieren
+        equipment_list = []
+        upgrades = self.active_unit.get("upgrades", [])
+        
+        # Standard-Ausrüstung basierend auf Einheitentyp
+        unit_type = self.active_unit.get("rank", "Corps")
+        if unit_type in ["Commander", "Operative"]:
+            equipment_list.extend(["Kommando-Kit", "Taktische Ausrüstung"])
+        
+        for upgrade in upgrades:
+            if isinstance(upgrade, str):
+                # Vereinfachte Extraktion von Equipment-Namen
+                clean_name = upgrade.split('(')[0].strip()
+                if any(keyword in clean_name.lower() for keyword in 
+                      ['granate', 'mine', 'kit', 'ausrüstung', 'equipment', 'device']):
+                    equipment_list.append(clean_name)
+        
+        # Standard Equipment falls keine gefunden
+        if not equipment_list:
+            equipment_list = ["Standard-Kit", "Erste-Hilfe", "Kommunikationsgerät"]
+        
+        equipment_var = tk.StringVar()
+        for i, equipment in enumerate(equipment_list[:8]):  # Max 8 Ausrüstungsgegenstände
+            tk.Radiobutton(equipment_frame, text=f"⚙️ {equipment}", variable=equipment_var, 
+                          value=equipment, font=("Segoe UI", 10), anchor="w").pack(fill="x", pady=2)
+        
+        # Effekte
+        effects_frame = tk.Frame(top)
+        effects_frame.pack(fill="x", padx=20, pady=10)
+        
+        tk.Label(effects_frame, text="Mögliche Effekte:", font=("Segoe UI", 10, "bold")).pack(anchor="w")
+        effects_text = tk.Text(effects_frame, height=6, width=50)
+        effects_text.pack(fill="x", pady=5)
+        effects_text.insert("1.0", "• Heilen von 1-2 HP\n• Zusätzliche Angriffswürfel\n• Bonus auf Verteidigung\n• Temporäre Fähigkeiten\n• Entfernung von Suppressions\n• Bewegungsbonus")
+        effects_text.config(state="disabled")
+        
+        # Buttons
+        button_frame = tk.Frame(top)
+        button_frame.pack(pady=20)
+        
+        def use_equipment():
+            import random
+            selected = equipment_var.get()
+            if not selected:
+                messagebox.showwarning("Fehler", "Bitte wähle Ausrüstung aus.")
+                return
+            
+            # Ausrüstungseffekte
+            effects = []
+            if "granate" in selected.lower() or "mine" in selected.lower():
+                effects.append("💥 Explosionsschaden in Bereich")
+            elif "erste" in selected.lower() or "hilfe" in selected.lower():
+                heal_amount = random.randint(1, 2)
+                old_hp = self.active_unit["current_hp"]
+                max_hp = self.active_unit["hp"]
+                self.active_unit["current_hp"] = min(max_hp, old_hp + heal_amount)
+                effects.append(f"❤️ Heilung: +{heal_amount} HP")
+            elif "kit" in selected.lower():
+                # Entferne Suppression
+                old_supp = self.active_unit.get("suppression", 0)
+                if old_supp > 0:
+                    self.active_unit["suppression"] = max(0, old_supp - 1)
+                    effects.append(f"🧘 Suppression reduziert: -{1}")
+                # Bonus Aim
+                self.active_unit["aim"] = self.active_unit.get("aim", 0) + 1
+                effects.append("🎯 +1 Zielmarker")
+            else:
+                effects.append("⚙️ Spezialeffekt angewandt")
+            
+            top.destroy()
+            self.actions_remaining -= 1
+            self.update_actions_ui()
+            self.update_trees()
+            
+            messagebox.showinfo("Ausrüstung benutzt", 
+                f"{self.active_unit['name']} benutzt {selected}\n\n" +
+                "\n".join(effects))
+        
+        tk.Button(button_frame, text="AUSRÜSTUNG BENUTZEN", command=use_equipment, 
+                 bg="#FF9800", fg="white", font=("Segoe UI", 12, "bold")).pack(side="left", padx=5)
+        tk.Button(button_frame, text="Abbrechen", command=top.destroy, 
+                 bg="#9E9E9E", fg="white").pack(side="left", padx=5)
 
     def ai_perform_actions(self):
-        # Generate instructions for the human player
+        # Enhanced AI Decision Making with improved movement and targeting
         unit_name = self.active_unit["name"]
         instructions = []
 
@@ -1312,36 +2002,109 @@ class GameCompanion:
             instructions.append("1. PANIK: Einheit flieht (Sammeln von Mut).")
             instructions.append("2. Wirft alle Missionsziele ab.")
         else:
-            # Simple AI Heuristic
+            # Enhanced AI Decision Making
             is_melee = False
+            has_ranged = False
             max_range = 0
+            
+            # Alle Bodeneinheiten können Nahkampf (außer Fahrzeuge)
+            unit_type = self.active_unit.get("type", "trooper")
+            can_melee = unit_type.lower() not in ["vehicle", "speeder", "walker", "creature"]
+            
             if "weapons" in self.active_unit:
                 for w in self.active_unit["weapons"]:
-                    if w["range"][1] > max_range: max_range = w["range"][1]
-                    if w["range"][0] == 0: is_melee = True
-
-            # Actions based on role
-            if is_melee and max_range < 2:
-                instructions.append("1. BEWEGUNG: Auf nächsten Feind zu (Doppelt).")
-                instructions.append("   (Oder Angriff wenn in Reichweite).")
-                instructions.append("2. ANGRIFF: Falls möglich (Nahkampf).")
+                    weapon_range = w["range"][1]
+                    if weapon_range > max_range: 
+                        max_range = weapon_range
+                    if w["range"][0] == 0: 
+                        is_melee = True
+                    if weapon_range > 1:
+                        has_ranged = True
+            
+            # AI Strategy basierend auf Situation
+            enemy_in_range = self.check_enemies_in_range()
+            # Entferne problematische Methodenaufrufe für physisches Spiel
+            # closest_enemy = self.find_closest_enemy()
+            # mission_objectives = self.get_mission_objectives()
+            
+            if not enemy_in_range:
+                # Keine Feinde in Reichweite - Intelligente Bewegung
+                instructions.append("🔄 KEINE FEINDE IN REICHWEITE:")
+                instructions.append("1. BEWEGUNG: Auf nächsten Feind zu oder Missionsziel")
+                instructions.append("2. Nach Bewegung: Erneut Reichweite prüfen")
+                if can_melee:
+                    instructions.append("3. NAHKAMPF: Bei Kontakt (alle Bodeneinheiten)")
+                instructions.append("4. ZIELEN oder AUSRÜSTUNG: Falls kein Angriff möglich")
+                
+                # Automatische Bewegung zur nächsten Einheit
+                if closest_enemy:
+                    self.auto_move_to_target(closest_enemy)
+                    
+            elif is_melee or can_melee:
+                # Nahkampf bevorzugen - entferne self.enemy_in_melee_range() Aufruf
+                # Nahkampf bevorzugen
+                instructions.append("⚔️ NAHKAMPF STRATEGIE:")
+                instructions.append("1. NAHKAMPF-ANGRIFF: Hoher Schaden, kann nicht geblockt werden")
+                instructions.append("2. Alle Bodeneinheiten können Nahkampf ausführen")
+                instructions.append("3. ZIELEN: Falls Angriff nicht optimal")
+                
+                # Automatischer Nahkampf-Versuch
+                if self.enemy_in_melee_range():
+                    self.auto_attempt_melee()
+                    
+            elif has_ranged:
+                # Fernkampf mit intelligenter Zielwahl
+                instructions.append("🎯 FERNKAMPF STRATEGIE:")
+                instructions.append("1. ZIELEN: Für bessere Trefferchance")
+                instructions.append(f"2. ANGRIFF: Fernwaffen (Reichweite {max_range})")
+                instructions.append("3. AUSRÜSTUNG: Nutze verfügbare Items")
+                
+                # Automatisches Zielen und Angreifen
+                self.auto_aim_and_attack()
+                
             else:
-                instructions.append("1. ZIELEN (AIM): Erhalte Zielmarker.")
-                instructions.append(f"2. ANGRIFF: Auf Feind mit wenigster Deckung (Reichweite {max_range}).")
+                # Support und Ausrüstung
+                instructions.append("🔧 SUPPORT STRATEGIE:")
+                instructions.append("1. AUSRÜSTUNG: Nutze Unterstützungs-Items")
+                instructions.append("2. BEWEGUNG: Position für Support")
+                instructions.append("3. AUSWEICHEN oder BEREITSCHAFT")
 
-        # If simple Heuristic says Attack, we ask user for targets
+        # Show instructions für physisches Spiel
+        instruction_text = f"🤖 KI-Aktivierung: {unit_name}\\n\\n" + "\\n".join(instructions)
+        instruction_text += "\\n\\n📋 Führe diese Aktionen auf dem physischen Spieltisch aus."
+        instruction_text += "\\n🎲 Verwende die Aktions-Buttons um Ergebnisse einzutragen."
+        
+        messagebox.showinfo("AI Zug", instruction_text)
+
+        # Legacy AI logic for compatibility  
         if not self.is_panicked and is_melee and max_range < 2:
-             # Melee Attack Query
-             self.ai_query_targets(self.active_unit, is_melee=True)
+            # Melee Attack Query
+            self.ai_query_targets(self.active_unit, is_melee=True)
         elif not self.is_panicked and max_range >= 2:
-             # Ranged Attack Query
-             self.ai_query_targets(self.active_unit, is_melee=False)
+            # Ranged Attack Query
+            self.ai_query_targets(self.active_unit, is_melee=False)
         else:
-            # Move only or Panic
-            # Show Dialog
-            msg = f"Einheit: {unit_name}\n\n" + "\n".join(instructions) + "\n\nBitte führe diese Aktionen auf dem Tisch aus.\n\nVerwende die Action-Buttons um die Aktionen durchzuführen."
+            # No attack possible - show options
+            msg = f"Einheit: {unit_name}\\n\\n" + "\\n".join(instructions) + "\\n\\nBitte führe diese Aktionen auf dem Tisch aus."
             messagebox.showinfo("AI Zug Anweisung", msg)
-            # Keep activation UI active so user can perform actions manually
+
+    def find_closest_enemy(self):
+        """Findet den nächsten Feind für AI-Bewegung (vereinfacht)"""
+        return {"name": "Feindliche Einheit", "distance": random.randint(2, 6)}
+
+    def get_mission_objectives(self):
+        """Gibt verfügbare Missionsziele zurück (vereinfacht)"""
+        if self.mission_data:
+            return [{"name": "Missionsziel", "distance": random.randint(2, 5)}]
+        return []
+
+    def enemy_in_melee_range(self):
+        """Prüft ob Feinde in Nahkampf-Reichweite sind (vereinfacht)"""
+        return random.random() < 0.3
+
+    def find_best_ranged_target(self):
+        """Findet das beste Fernkampf-Ziel (vereinfacht)"""
+        return {"name": "Bestes Ziel", "priority": 75}
 
     def ai_query_targets(self, unit, is_melee):
         top = tk.Toplevel(self.root)
@@ -2322,6 +3085,286 @@ class GameCompanion:
         
         # UI aktualisieren für Reaktion
         self.update_trees()
+    
+    def check_enemies_in_range(self):
+        """Prüfe ob Feinde in Waffenreichweite sind (Vereinfacht)"""
+        # Vereinfachte Logik - in echter Implementation würde man
+        # Spielbrett-Positionen und Distanzen berechnen
+        if not self.active_unit or "weapons" not in self.active_unit:
+            return False
+        
+        # Simuliere Reichweiten-Check
+        # In echter Implementation: Berechne Distanzen auf dem Spielfeld
+        max_range = 0
+        for w in self.active_unit["weapons"]:
+            if w["range"][1] > max_range:
+                max_range = w["range"][1]
+        
+        # Heuristik: 70% Chance dass Feinde in Reichweite sind
+        import random
+        return random.random() < 0.7
+    
+    def enemy_in_melee_range(self):
+        """Prüfe ob Feinde in Nahkampf-Reichweite (Kontakt) sind"""
+        # Vereinfachte Logik - in echter Implementation würde man
+        # Kontakt zwischen Einheiten auf dem Spielfeld prüfen
+        
+        # Heuristik: 30% Chance für Nahkampf-Kontakt
+        import random
+        return random.random() < 0.3
+    
+    def get_melee_weapons(self, unit):
+        """Hole alle Nahkampf-Waffen einer Einheit"""
+        melee_weapons = []
+        
+        # Prüfe explizite Nahkampf-Waffen
+        if "weapons" in unit:
+            for w in unit["weapons"]:
+                if w["range"][0] == 0 and w["range"][1] <= 1:
+                    melee_weapons.append(w)
+        
+        # Alle Bodeneinheiten haben Standard-Nahkampf
+        unit_type = unit.get("type", "trooper")
+        if unit_type.lower() not in ["vehicle", "speeder", "walker"] and not melee_weapons:
+            # Standard Nahkampf für alle Infanterie
+            standard_melee = {
+                "name": "Unarmed Melee",
+                "range": [0, 1],
+                "dice": {"red": 1},
+                "keywords": ["Melee"]
+            }
+            melee_weapons.append(standard_melee)
+        
+        return melee_weapons
+    
+    def update_score_display(self):
+        """Update the score display in the UI"""
+        if hasattr(self, 'lbl_score'):
+            self.lbl_score.config(text=f"Spieler: {self.player_score} | Gegner: {self.opponent_score}")
+
+    def open_interaction_dialog(self):
+        """Öffnet Dialog für Interaktions-Aktionen"""
+        interact_window = tk.Toplevel(self.root)
+        interact_window.title("Interaktion - 1 Aktion")
+        interact_window.geometry("400x500")
+        interact_window.resizable(False, False)
+        
+        tk.Label(interact_window, text="Interaktions-Möglichkeiten", 
+                font=("Arial", 14, "bold")).pack(pady=10)
+        
+        interactions = [
+            ("Bomben/Sprengladung aktivieren", "explosive"),
+            ("Bomben/Sprengladung deaktivieren", "defuse"), 
+            ("Objekt aufheben", "pickup"),
+            ("Objekt fallen lassen", "drop"),
+            ("Schalter/Terminal bedienen", "terminal"),
+            ("Tür öffnen/schließen", "door"),
+            ("Fahrzeug besteigen", "embark"),
+            ("Fahrzeug verlassen", "disembark"),
+            ("Reparieren", "repair"),
+            ("Missionsziel aktivieren", "objective")
+        ]
+        
+        for interaction_name, interaction_type in interactions:
+            btn = tk.Button(interact_window, text=interaction_name,
+                          command=lambda t=interaction_type, n=interaction_name: self.execute_interaction(t, n, interact_window),
+                          font=("Arial", 10), width=30, pady=5)
+            btn.pack(pady=2)
+        
+        tk.Button(interact_window, text="Abbrechen", 
+                 command=interact_window.destroy,
+                 bg="#f44336", fg="white", font=("Arial", 12)).pack(pady=20)
+
+    def execute_interaction(self, interaction_type, interaction_name, window):
+        """Führt eine Interaktion aus"""
+        unit_name = self.active_unit.get("name", "Unbekannt")
+        
+        # Erfolgs-Wahrscheinlichkeit basierend auf Einheit
+        success_chance = 0.8  # Standard 80% Erfolgschance
+        
+        # Modifikationen basierend auf Einheit-Typ
+        if "Engineer" in unit_name or "Technician" in unit_name:
+            success_chance = 0.95  # Spezialisten haben höhere Erfolgsrate
+        elif "Trooper" in unit_name:
+            success_chance = 0.7   # Normale Truppen haben niedrigere Rate
+        
+        success = random.random() < success_chance
+        
+        if success:
+            result = "erfolgreich"
+            # Spezielle Effekte für verschiedene Interaktionen
+            if interaction_type == "explosive":
+                # Schade im Umkreis
+                messagebox.showinfo("Explosion!", 
+                              "BOOM! 💥\n\nExplosion verursacht Bereich-Schaden!\n(Details würden basierend auf Missionsziel implementiert)")
+            elif interaction_type == "repair":
+                # Repariere Fahrzeug oder Objekt
+                messagebox.showinfo("Reparatur", 
+                              "🔧 Reparatur erfolgreich!\n\nObjekt/Fahrzeug wurde repariert.")
+        else:
+            result = "fehlgeschlagen"
+        
+        messagebox.showinfo("Interaktion", 
+                          f"{unit_name} hat versucht: {interaction_name}\n\nErgebnis: {result.title()}!")
+        
+        # Aktion verbrauchen und Fenster schließen
+        self.actions_remaining = max(0, self.actions_remaining - 1)
+        # self.update_center()  # Entfernt da Methode nicht existiert
+        window.destroy()
+
+    def open_melee_dialog(self):
+        """Öffnet Nahkampf-Dialog für alle Bodeneinheiten"""
+        if not self.active_unit:
+            return
+            
+        melee_window = tk.Toplevel(self.root)
+        melee_window.title("Nahkampf-Angriff")
+        melee_window.geometry("450x400") 
+        melee_window.resizable(False, False)
+        
+        tk.Label(melee_window, text="Nahkampf-Angriff", 
+                font=("Arial", 14, "bold")).pack(pady=10)
+        
+        # Info über Nahkampf-Regeln
+        info_text = """Nahkampf-Regeln:
+• Nur gegen Einheiten in Reichweite 1
+• Alle Bodeneinheiten können Nahkampf
+• Würfel = Anzahl Miniaturen
+• +1 Würfel wenn mehr Minis als Ziel
+• Verteidiger kann zurückschlagen"""
+        
+        tk.Label(melee_window, text=info_text, 
+                font=("Arial", 10), justify="left").pack(pady=10)
+        
+        # Ziel auswählen
+        tk.Label(melee_window, text="Ziel auswählen:", 
+                font=("Arial", 12, "bold")).pack(pady=(10,5))
+        
+        # Finde Ziele in Reichweite 1
+        targets = self.get_melee_targets()
+        
+        if not targets:
+            tk.Label(melee_window, text="Keine Ziele in Nahkampf-Reichweite!", 
+                    fg="red", font=("Arial", 12)).pack(pady=10)
+            tk.Button(melee_window, text="Schließen", 
+                     command=melee_window.destroy).pack(pady=10)
+            return
+        
+        target_var = tk.StringVar(value=targets[0] if targets else "")
+        target_cb = ttk.Combobox(melee_window, textvariable=target_var, 
+                               values=targets, state="readonly", width=30)
+        target_cb.pack(pady=5)
+        
+        # Angriff ausführen
+        def execute_melee():
+            target = target_var.get()
+            if target:
+                self.execute_melee_attack(target)
+                melee_window.destroy()
+        
+        tk.Button(melee_window, text="Nahkampf ausführen!", 
+                 command=execute_melee,
+                 bg="#F44336", fg="white", font=("Arial", 12, "bold")).pack(pady=20)
+        
+        tk.Button(melee_window, text="Abbrechen", 
+                 command=melee_window.destroy,
+                 bg="#757575", fg="white").pack(pady=5)
+
+    def get_melee_targets(self):
+        """Findet alle Einheiten in Nahkampf-Reichweite (simuliert)"""
+        targets = []
+        
+        # Simuliere Ziele basierend auf Gegner-Armee
+        enemy_army = self.opponent_army if self.active_side == "Player" else self.player_army
+        
+        for unit in enemy_army.get("units", []):
+            if unit.get("current_hp", 0) > 0:  # Nur lebende Einheiten
+                # Simuliere dass einige Einheiten in Reichweite sind
+                if random.random() < 0.4:  # 40% Chance in Nahkampf-Reichweite
+                    targets.append(unit.get("name", "Unbekannt"))
+        
+        return targets
+
+    def execute_melee_attack(self, target_name):
+        """Führt Nahkampf-Angriff aus"""
+        if not self.active_unit:
+            return
+            
+        attacker = self.active_unit
+        attacker_name = attacker.get("name", "Unbekannt")
+        attacker_minis = attacker.get("minis", 1)
+        
+        # Finde Ziel-Einheit
+        enemy_army = self.opponent_army if self.active_side == "Player" else self.player_army
+        target_unit = None
+        
+        for unit in enemy_army.get("units", []):
+            if unit.get("name") == target_name:
+                target_unit = unit
+                break
+        
+        if not target_unit:
+            messagebox.showerror("Fehler", "Ziel nicht gefunden!")
+            return
+            
+        target_minis = target_unit.get("minis", 1)
+        
+        # Berechne Angriffs-Würfel (Basis = Anzahl Miniaturen)
+        attack_dice = attacker_minis
+        
+        # Bonus wenn mehr Minis als Gegner
+        if attacker_minis > target_minis:
+            attack_dice += 1
+            
+        # Würfle für Angriff
+        hits = 0
+        for _ in range(attack_dice):
+            if random.randint(1, 8) >= 4:  # 4+ zum Treffen
+                hits += 1
+        
+        # Verteidigung
+        defense_dice = target_minis
+        blocks = 0
+        for _ in range(defense_dice):
+            if random.randint(1, 8) >= 5:  # 5+ zum Blocken  
+                blocks += 1
+        
+        # Schaden berechnen
+        damage = max(0, hits - blocks)
+        
+        # Schaden anwenden
+        if damage > 0:
+            self.apply_figure_damage(target_unit, damage)
+        
+        # Zurückschlag (falls Ziel noch lebt)
+        counter_damage = 0
+        if target_unit.get("current_hp", 0) > 0:
+            counter_dice = target_unit.get("minis", 1)
+            counter_hits = sum(1 for _ in range(counter_dice) if random.randint(1, 8) >= 5)
+            counter_blocks = sum(1 for _ in range(attacker_minis) if random.randint(1, 8) >= 5)
+            counter_damage = max(0, counter_hits - counter_blocks)
+            
+            if counter_damage > 0:
+                self.apply_figure_damage(attacker, counter_damage)
+        
+        # Ergebnis anzeigen
+        result_text = f"Nahkampf: {attacker_name} vs {target_name}\n\n"
+        result_text += f"Angriff: {attack_dice} Würfel → {hits} Treffer\n"
+        result_text += f"Verteidigung: {defense_dice} Würfel → {blocks} Blocks\n"
+        result_text += f"Schaden an {target_name}: {damage}\n"
+        
+        if counter_damage > 0:
+            result_text += f"\nZurückschlag: {counter_damage} Schaden an {attacker_name}"
+        
+        messagebox.showinfo("Nahkampf-Ergebnis", result_text)
+        
+        # Aktion verbrauchen
+        self.actions_remaining = max(0, self.actions_remaining - 1)
+        
+        # Trees aktualisieren
+        self.update_tree(self.tree_player, self.player_army["units"])
+        self.update_tree(self.tree_opponent, self.opponent_army["units"])
+        # self.update_center()  # Entfernt da Methode nicht existiert
 
 if __name__ == "__main__":
 

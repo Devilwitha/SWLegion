@@ -212,13 +212,24 @@ class CustomFactoryMenu:
         from tkinter import filedialog, scrolledtext
         
         try:
-            # Versuche catalog.json zu laden
-            catalog_path = "catalog.json"
-            if not os.path.exists(catalog_path):
-                catalog_path = os.path.join("..", "catalog.json")
-                if not os.path.exists(catalog_path):
-                    messagebox.showerror("Fehler", "catalog.json nicht gefunden!")
-                    return
+            # Versuche catalog.json zu laden - suche in verschiedenen Pfaden
+            possible_paths = [
+                "catalog.json",
+                os.path.join("db", "catalog.json"),
+                os.path.join("..", "catalog.json"),
+                os.path.join("..", "db", "catalog.json")
+            ]
+            
+            catalog_path = None
+            for path in possible_paths:
+                if os.path.exists(path):
+                    catalog_path = path
+                    break
+            
+            if not catalog_path:
+                messagebox.showerror("Fehler", 
+                                   f"catalog.json nicht gefunden!\n\nSuchpfade:\n" + "\n".join(possible_paths))
+                return
             
             with open(catalog_path, "r", encoding="utf-8") as f:
                 catalog_data = f.read()
