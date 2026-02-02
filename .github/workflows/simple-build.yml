@@ -1,0 +1,116 @@
+name: Simple Build
+
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pyinstaller
+        
+    - name: Build executable
+      run: |
+        cd build\Win
+        python -m PyInstaller --clean --noconfirm SWLegion.spec
+        
+    - name: Create portable package
+      run: |
+        cd build\Win
+        
+        # Create portable folder
+        if (Test-Path "SWLegion_Portable") { Remove-Item -Recurse -Force "SWLegion_Portable" }
+        New-Item -ItemType Directory -Name "SWLegion_Portable"
+        
+        # Copy executable and all dependencies
+        Copy-Item -Path "dist\SWLegion\*" -Destination "SWLegion_Portable\" -Recurse
+        
+        # Create start script
+        @'
+@echo off
+cd /d "%~dp0"
+SWLegion.exe
+pause
+'@ | Out-File -FilePath "SWLegion_Portable\Start_SWLegion.bat" -Encoding ASCII
+        
+        # Create README
+        @'
+Star Wars Legion Tool Suite - Portable Version
+
+Installation:
+1. Extract this folder to any location
+2. Double-click Start_SWLegion.bat
+
+System Requirements: Windows 10+
+'@ | Out-File -FilePath "SWLegion_Portable\README.txt" -Encoding UTF8
+        
+        # Create ZIP
+        Compress-Archive -Path "SWLegion_Portable\*" -DestinationPath "SWLegion_Portable.zip" -Force
+        
+        # Show file info
+        $size = (Get-Item "SWLegion_Portable.zip").Length / 1MB
+        Write-Host "Portable package created: $($size.ToString('F1')) MB"
+        
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: SWLegion-Portable
+        path: build/Win/SWLegion_Portable.zip
+        
+  release:
+    needs: build
+    runs-on: windows-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    
+    steps:
+    - name: Download artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: SWLegion-Portable
+        path: ./
+        
+    - name: Create release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: SWLegion_Portable.zip
+        name: Star Wars Legion Tool Suite ${{ github.ref_name }}
+        body: |
+          ## Star Wars Legion Tool Suite ${{ github.ref_name }}
+          
+          ### 📦 Portable Windows Version
+          
+          **Download & Run:**
+          1. Download `SWLegion_Portable.zip`
+          2. Extract to any folder
+          3. Run `Start_SWLegion.bat`
+          
+          **Features:**
+          - 🎯 Army Builder with marker system
+          - 🎲 Mission Builder
+          - 🤖 Game Companion with AI
+          - 🛠️ Custom Content Creator
+          - 🗺️ Map Creator
+          
+          **Requirements:** Windows 10 or later
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

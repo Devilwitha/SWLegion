@@ -1,6 +1,6 @@
 # Star Wars Legion: All-in-One Tool Suite
 
-![Build Status](https://github.com/Devilwitha/SWLegion/actions/workflows/build-and-release.yml/badge.svg)
+![Build Status](https://github.com/Devilwitha/SWLegion/actions/workflows/simple-build.yml/badge.svg)
 ![Latest Release](https://img.shields.io/github/v/release/Devilwitha/SWLegion)
 ![Downloads](https://img.shields.io/github/downloads/Devilwitha/SWLegion/total)
 
