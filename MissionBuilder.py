@@ -299,20 +299,40 @@ class LegionMissionGenerator:
         def ft_to_px_w(ft): return (ft / 6.0) * w
         def ft_to_px_h(ft): return (ft / 3.0) * h
 
-        # Draw Zones (Red)
-        zones = [] # List of tuples (x1, y1, x2, y2, color_fill, text_tag)
+        # CHECK FOR CUSTOM DEPLOYMENT MAP
+        custom_card = next((c for c in self.db.battle_cards if c["name"] == self.current_deployment and c.get("category") == "Deployment"), None)
 
-        # Standard: Blue starts Bottom, Red starts Top (usually).
-        # We will assume:
-        # Blue = Player 1 (Bottom/Left)
-        # Red = Player 2 (Top/Right)
+        if custom_card and custom_card.get("map_file"):
+            # Load custom map
+            try:
+                with open(custom_card["map_file"], "r") as f:
+                    zones = json.load(f)
 
-        mode = self.current_deployment
+                # Scale factors (Creator was 600x300, Current is 800x400)
+                # Ratio is same (2:1). Factor = 800/600 = 1.333
+                scale_x = w / 600.0
+                scale_y = h / 300.0
 
-        # Note: Legion standard is 6x3.
-        # Range 1 = 6 inches = 0.5 ft.
+                for z in zones:
+                    c = z["color"]
+                    coords = z["coords"]
 
-        if mode == "Battle Lines":
+                    # Scale coords
+                    x0 = coords[0] * scale_x
+                    y0 = coords[1] * scale_y
+                    x1 = coords[2] * scale_x
+                    y1 = coords[3] * scale_y
+
+                    fill = "#ffcdd2" if c == "red" else "#bbdefb"
+                    outline = "red" if c == "red" else "blue"
+
+                    self.canvas.create_rectangle(x0, y0, x1, y1, fill=fill, outline=outline)
+
+            except Exception as e:
+                self.canvas.create_text(w/2, h/2, text=f"Fehler beim Laden der Karte:\n{e}", fill="red")
+
+            # Skip standard logic
+        elif mode == "Battle Lines":
             # Long edges, Range 1 deep.
             # Top edge (Red): 0 to Range 1 (0.5ft) height
             range_1_px = ft_to_px_h(0.5)

@@ -8,9 +8,13 @@ class CustomBattleCardCreator:
     def __init__(self, root):
         self.root = root
         self.root.title("SW Legion: Custom Battle Card Creator")
-        self.root.geometry("800x600")
+        self.root.geometry("1100x700")
 
         self.custom_file = "custom_battle_cards.json"
+        self.maps_dir = "maps"
+        if not os.path.exists(self.maps_dir):
+            os.makedirs(self.maps_dir)
+
         self.cards_data = self.load_data()
 
         self.setup_ui()
@@ -72,17 +76,87 @@ class CustomBattleCardCreator:
         self.cb_category = ttk.Combobox(right_frame, values=["Objective", "Deployment", "Condition"], state="readonly", width=20)
         self.cb_category.grid(row=2, column=1, sticky="w", pady=5)
         self.cb_category.current(0)
+        self.cb_category.bind("<<ComboboxSelected>>", self.toggle_map_editor)
 
         # Text
         tk.Label(right_frame, text="Regeltext:").grid(row=3, column=0, sticky="ne", pady=5)
-        self.txt_info = tk.Text(right_frame, width=40, height=10)
+        self.txt_info = tk.Text(right_frame, width=40, height=5)
         self.txt_info.grid(row=3, column=1, sticky="w", pady=5)
+
+        # Map Editor Frame (Initially hidden)
+        self.map_frame = tk.Frame(right_frame, bd=2, relief=tk.GROOVE)
+        self.map_frame.grid(row=4, column=0, columnspan=2, pady=10, sticky="w")
+
+        tk.Label(self.map_frame, text="Aufstellungszonen zeichnen", font=("Segoe UI", 10, "bold")).pack(pady=5)
+
+        tool_bar = tk.Frame(self.map_frame)
+        tool_bar.pack(fill=tk.X)
+
+        tk.Button(tool_bar, text="Rot Zone (Rechteck)", bg="#ffcdd2", command=lambda: self.set_tool("red")).pack(side=tk.LEFT, padx=5)
+        tk.Button(tool_bar, text="Blau Zone (Rechteck)", bg="#bbdefb", command=lambda: self.set_tool("blue")).pack(side=tk.LEFT, padx=5)
+        tk.Button(tool_bar, text="Löschen", bg="#ffcccc", command=self.clear_canvas).pack(side=tk.RIGHT, padx=5)
+
+        # Canvas 6x3 ratio (approx 600x300)
+        self.canvas = tk.Canvas(self.map_frame, width=600, height=300, bg="#e1f5fe")
+        self.canvas.pack(pady=5)
+        self.canvas.bind("<ButtonPress-1>", self.on_press)
+        self.canvas.bind("<B1-Motion>", self.on_drag)
+        self.canvas.bind("<ButtonRelease-1>", self.on_release)
 
         # Save Button
         btn_save = tk.Button(right_frame, text="💾 Speichern", command=self.save_entry, bg="#4CAF50", fg="white", font=("Segoe UI", 12, "bold"))
-        btn_save.grid(row=4, column=1, pady=30, sticky="w")
+        btn_save.grid(row=5, column=1, pady=30, sticky="w")
 
         self.current_id = None
+        self.current_tool = None
+        self.current_shape = None
+        self.map_items = [] # Store rect data: {"coords": [x0,y0,x1,y1], "color": "red"/"blue"}
+
+        self.toggle_map_editor()
+
+    def toggle_map_editor(self, event=None):
+        cat = self.cb_category.get()
+        if cat == "Deployment":
+            self.map_frame.grid()
+        else:
+            self.map_frame.grid_remove()
+
+    def set_tool(self, color):
+        self.current_tool = color
+
+    def clear_canvas(self):
+        self.canvas.delete("all")
+        self.map_items = []
+
+    def on_press(self, event):
+        if not self.current_tool: return
+        self.start_x = event.x
+        self.start_y = event.y
+        color = "red" if self.current_tool == "red" else "blue"
+        fill = "#ffcdd2" if color == "red" else "#bbdefb"
+
+        self.current_shape = self.canvas.create_rectangle(
+            self.start_x, self.start_y, self.start_x, self.start_y,
+            fill=fill, outline=color, tags="zone"
+        )
+
+    def on_drag(self, event):
+        if self.current_shape:
+            self.canvas.coords(self.current_shape, self.start_x, self.start_y, event.x, event.y)
+
+    def on_release(self, event):
+        if self.current_shape:
+            coords = self.canvas.coords(self.current_shape)
+            # Normalize coords
+            x0, y0, x1, y1 = coords
+            if x0 > x1: x0, x1 = x1, x0
+            if y0 > y1: y0, y1 = y1, y0
+
+            self.map_items.append({
+                "coords": [x0, y0, x1, y1],
+                "color": self.current_tool
+            })
+            self.current_shape = None
 
     def refresh_listbox(self):
         self.listbox.delete(0, tk.END)
@@ -96,6 +170,8 @@ class CustomBattleCardCreator:
         self.entry_name.delete(0, tk.END)
         self.cb_category.current(0)
         self.txt_info.delete("1.0", tk.END)
+        self.clear_canvas()
+        self.toggle_map_editor()
 
     def load_into_form(self, event):
         sel = self.listbox.curselection()
@@ -110,6 +186,19 @@ class CustomBattleCardCreator:
         self.entry_name.insert(0, data.get("name", ""))
         self.cb_category.set(data.get("category", "Objective"))
         self.txt_info.insert("1.0", data.get("text", ""))
+        self.toggle_map_editor()
+
+        # Load Map if exists
+        map_file = data.get("map_file")
+        if map_file and os.path.exists(map_file):
+            with open(map_file, "r") as f:
+                items = json.load(f)
+                self.map_items = items
+                for item in items:
+                    c = item["color"]
+                    fill = "#ffcdd2" if c == "red" else "#bbdefb"
+                    outline = "red" if c == "red" else "blue"
+                    self.canvas.create_rectangle(*item["coords"], fill=fill, outline=outline, tags="zone")
 
     def delete_entry(self):
         sel = self.listbox.curselection()
@@ -131,19 +220,30 @@ class CustomBattleCardCreator:
         category = self.cb_category.get()
         text = self.txt_info.get("1.0", tk.END).strip()
 
+        card_uuid = self.current_id if self.current_id else str(uuid.uuid4())
+
+        # Save Map Data if Deployment
+        map_file_path = None
+        if category == "Deployment" and self.map_items:
+            filename = f"{card_uuid}.json"
+            map_file_path = os.path.join(self.maps_dir, filename)
+            with open(map_file_path, "w") as f:
+                json.dump(self.map_items, f)
+
         new_entry = {
             "name": name,
             "category": category,
             "text": text,
-            "id": str(uuid.uuid4()),
-            "is_custom": True
+            "id": card_uuid,
+            "is_custom": True,
+            "map_file": map_file_path
         }
 
         # Update or Append
         if self.current_id:
             for i, entry in enumerate(self.cards_data):
                 if entry.get("id") == self.current_id:
-                    new_entry["id"] = self.current_id
+                    # Preserve map file if not updated? No, we overwrite it.
                     self.cards_data[i] = new_entry
                     break
         else:
