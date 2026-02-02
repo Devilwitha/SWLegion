@@ -9,21 +9,27 @@ Dieses Projekt bietet eine Sammlung von digitalen Werkzeugen für das Tabletop-S
 ## 📋 Projektinformationen
 
 **Code by:** BolliSoft (Nico Bollhalder)  
-**Programm Version:** 1.0v  
+**Programm Version:** 1.1v  
 **Regelwerk:** 2.5v  
 **Github:** https://github.com/Devilwitha/SWLegion
+**Neue Features:** Automatische CI/CD, Windows Installer, AI-Integration, Visual Marker System
 
 ## 🔽 Download & Installation
+
+### Automatische Builds
+Jeder GitHub Commit erstellt automatisch neue Releases mit beiden Installationsoptionen.
 
 ### Windows Installer (Empfohlen)
 1. Lade die neueste Version von den [Releases](https://github.com/Devilwitha/SWLegion/releases) herunter
 2. Führe `SWLegion_Installer.exe` aus und folge dem Setup-Assistenten
 3. Starte das Programm über das Startmenü oder die Desktop-Verknüpfung
+4. **Neu:** Automatische AppData-Verwaltung für Benutzerdaten
 
 ### Portable Version
 1. Lade `SWLegion_Portable.zip` von den [Releases](https://github.com/Devilwitha/SWLegion/releases) herunter
 2. Entpacke das ZIP-Archiv an einen beliebigen Ort
 3. Führe `Start_SWLegion.bat` aus
+4. **Dual-Mode:** Funktioniert identisch zur installierten Version
 
 ## 🚀 Schnellstart (Development)
 
@@ -105,6 +111,7 @@ Spiele mit digitalem Support
 **Zweck:** Digitaler Spielassistent mit KI-Unterstützung
 *   **Rundenmanagement:** Automatische Phasenverfolgung (Kommando, Aktivierung, Ende)
 *   **Order Pool System:** Digitale Befehlsmarker mit Zufallsziehung
+*   **Visual Marker System:** 🎯 Aim, 💨 Dodge, 📉 Suppression, ⏸️ Panic Marker
 *   **Kampf-Simulator:**
     *   Automatische Würfelberechnung (Angriff & Verteidigung)
     *   Pierce, Cover und Surge-Verarbeitung
@@ -133,28 +140,68 @@ Spiele mit digitalem Support
 *   **Modulare Struktur:** `LegionRules.py` für Regelwerk-Referenzen
 *   **Flexible Speicherung:** JSON-Format für einfache Bearbeitung und Backup
 
-## 🔧 Technische Details
+## � Entwicklung & CI/CD
+
+### Automatische Builds
+Jeder Push zum Repository löst automatisch aus:
+1. **GitHub Actions Workflow** (.github/workflows/build-release-installer.yml)
+2. **PyInstaller Kompilierung** (Windows Executable)
+3. **Inno Setup Installer** (Professioneller Windows Installer)
+4. **Release Creation** (Beide Download-Optionen)
+
+### Build-System
+```bash
+# Lokaler Build (Windows)
+cd build/Win
+python -m PyInstaller --clean --noconfirm SWLegion.spec
+
+# Installer erstellen
+"C:\Program Files (x86)\Inno Setup 6\iscc.exe" SWLegion_Setup.iss
+```
+
+### Dual-Mode Kompatibilität
+- **Script-Modus:** Direkter Python-Aufruf für Entwicklung
+- **Executable-Modus:** Kompilierte Version für End-User
+- **Intelligente Imports:** Automatische Erkennung des Ausführungsmodus
+- **Permission-Safe:** AppData-Nutzung für installierte Anwendungen
+
+## �🔧 Technische Details
 
 ### Architektur
 ```
 MainMenu.py              # Hauptmenü und Launcher
-├── CustomFactoryMenu.py # Content Creation Hub
-├── ArmeeBuilder.py      # Army Management
-├── MissionBuilder.py    # Scenario Generation  
-├── GameCompanion.py     # Game Simulation
-├── LegionData.py        # Core Database
-├── LegionRules.py       # Rules Reference
-└── LegionUtils.py       # Utility Functions
+├── utilities/           # Modulverzeichnis
+│   ├── CustomFactoryMenu.py # Content Creation Hub
+│   ├── ArmeeBuilder.py      # Army Management
+│   ├── MissionBuilder.py    # Scenario Generation  
+│   ├── GameCompanion.py     # Game Simulation
+│   ├── BattlefieldMapCreator.py # Map Creator
+│   ├── CardPrinter.py       # Card Export
+│   ├── Custom*Creator.py    # Content Creators
+│   ├── LegionData.py        # Core Database
+│   ├── LegionRules.py       # Rules Reference
+│   └── LegionUtils.py       # Utility Functions
+├── .github/workflows/   # CI/CD Pipeline
+├── build/Win/          # Build Configuration
+└── db/                 # Database Files
 ```
 
 ### Dateistruktur
 ```
+# Portable/Script-Modus:
 /Armeen/                 # Gespeicherte Armeelisten
 /Missions/              # Generierte Missionen
 /maps/                  # Custom Schlachtfeldkarten
 /custom_*.json          # Benutzerdefinierte Inhalte
 /bilder/                # Programm-Assets
 catalog.json            # Zentrale Einheitendatenbank
+
+# Installierte Version:
+%APPDATA%/Star Wars Legion Tool Suite/
+├── Armeen/             # Benutzer-Armeen
+├── Missions/           # Benutzer-Missionen 
+├── maps/               # Benutzer-Karten
+└── logs/               # Anwendungs-Logs
 ```
 
 ## 🎯 Tipps für optimale Nutzung
@@ -180,6 +227,14 @@ catalog.json            # Zentrale Einheitendatenbank
 *   **AI-Features funktionieren nicht:** Überprüfe `gemini_key.txt` und Internet-Verbindung
 *   **Bilder werden nicht geladen:** Stelle sicher, dass PIL/Pillow installiert ist
 *   **Module starten nicht:** Überprüfe Python-Installation und Dateipfade
+*   **Permission Denied Fehler:** Installierte Version nutzt automatisch AppData-Verzeichnis
+*   **Import-Fehler:** Stelle sicher, dass alle utilities Module verfügbar sind
+*   **Custom Creator startet nicht:** Überprüfe Dual-Mode Import-Kompatibilität
+
+### Debug-Informationen
+*   **Logs:** Automatisches Logging in `legion_app.log` (Script-Modus) oder AppData (Installiert)
+*   **Execution Mode:** Automatische Erkennung von Script vs. Executable
+*   **Path Resolution:** Intelligente Pfad-Auflösung für verschiedene Ausführungsmodi
 
 ### Support
 Bei Problemen oder Fragen:
