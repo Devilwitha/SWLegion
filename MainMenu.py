@@ -31,30 +31,32 @@ class MainMenu:
             if getattr(sys, 'frozen', False):
                 # Running as executable
                 base_path = sys._MEIPASS  # PyInstaller temp directory
-                icon_path = os.path.join(base_path, "bilder", "SW_legion_logo.png")
             else:
                 # Running as script
-                icon_path = "bilder/SW_legion_logo.png"
+                base_path = os.path.dirname(os.path.abspath(__file__))
+                
+            icon_path_png = os.path.join(base_path, "bilder", "SW_legion_logo.png")
+            icon_path_ico = os.path.join(base_path, "bilder", "SW_legion_logo.ico")
             
-            if os.path.exists(icon_path):
-                icon_img = Image.open(icon_path)
+            # Prefer .ico for Windows title bar
+            if os.path.exists(icon_path_ico):
+                self.root.iconbitmap(icon_path_ico)
+            
+            # Fallback/Additional for taskbar
+            if os.path.exists(icon_path_png):
+                icon_img = Image.open(icon_path_png)
                 icon_img = icon_img.resize((32, 32), Image.Resampling.LANCZOS)
                 self.icon_photo = ImageTk.PhotoImage(icon_img)
                 self.root.iconphoto(True, self.icon_photo)
+                
         except Exception as e:
             logging.warning(f"Could not load icon: {e}")
             pass  # Fallback if icon loading fails
         
         # Load and display logo
         try:
-            # Get resource path for executable
-            if getattr(sys, 'frozen', False):
-                # Running as executable
-                base_path = sys._MEIPASS  # PyInstaller temp directory
-                logo_path = os.path.join(base_path, "bilder", "SW_legion_logo.png")
-            else:
-                # Running as script
-                logo_path = "bilder/SW_legion_logo.png"
+            # Path determined above
+            logo_path = os.path.join(base_path, "bilder", "SW_legion_logo.png")
             
             if os.path.exists(logo_path):
                 logo_img = Image.open(logo_path)

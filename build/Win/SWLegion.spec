@@ -30,6 +30,10 @@ a = Analysis(
         'tkinter.ttk',
         'tkinter.messagebox',
         'tkinter.filedialog',
+        'pygame',
+        'cv2',
+        'google.generativeai',
+        'google.ai.generativelanguage',
         'json',
         'logging',
         'subprocess',
@@ -83,7 +87,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='../../bilder/SW_legion_logo.png',  # Add the icon
+    icon='../../bilder/SW_legion_logo.ico',  # Add the icon
 )
 
 coll = COLLECT(

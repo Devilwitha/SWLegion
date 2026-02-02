@@ -10,16 +10,16 @@ import subprocess
 try:
     # Try relative imports first (when imported as part of utilities package)
     from .LegionData import LegionDatabase
-    from .LegionUtils import get_writable_path
+    from .LegionUtils import get_writable_path, get_gemini_key
 except ImportError:
     try:
         # Try package imports (when running with MainMenu)
         from utilities.LegionData import LegionDatabase
-        from utilities.LegionUtils import get_writable_path
+        from utilities.LegionUtils import get_writable_path, get_gemini_key
     except ImportError:
         # Fallback to absolute imports (when running as standalone script)
         from LegionData import LegionDatabase
-        from LegionUtils import get_writable_path
+        from LegionUtils import get_writable_path, get_gemini_key
 
 from PIL import Image, ImageTk
 
@@ -33,7 +33,7 @@ class LegionMissionGenerator:
     def __init__(self, root):
         self.root = root
         self.root.title("SW Legion: Mission & Map Generator")
-        self.root.geometry("1400x900")
+        self.root.geometry("1400x1200")
         
         # Set window icon
         try:
@@ -138,6 +138,9 @@ class LegionMissionGenerator:
 
         # 3c. MUSIK EINSTELLUNGEN
         self.create_music_section(frame_settings)
+        
+        # 3d. AI & KAMERA (GEMINI)
+        self.create_ai_section(frame_settings)
 
         # 4. BUTTON
         btn_gen = tk.Button(
@@ -320,13 +323,8 @@ class LegionMissionGenerator:
 
     def load_api_key(self):
         # Try to load from file
-        try:
-            if os.path.exists("gemini_key.txt"):
-                with open("gemini_key.txt", "r") as f:
-                    return f.read().strip()
-        except:
-            pass
-        return ""
+        key = get_gemini_key()
+        return key if key else ""
 
     def insert_formatted_text(self, text_widget, content):
         """Simple formatting: Bold titles and bullet points"""
@@ -387,7 +385,11 @@ class LegionMissionGenerator:
             "rounds": int(self.entry_runden.get()) if self.entry_runden.get().isdigit() else 6,
             "terrain": [k for k,v in self.var_gelaende.items() if v.get()],
             "prompt_text": self.txt_output.get("1.0", tk.END),
-            "scenario_text": self.current_scenario_text
+            "scenario_text": self.current_scenario_text,
+            "ai_settings": {
+                "gemini_enabled": self.var_gemini_enabled.get() if hasattr(self, 'var_gemini_enabled') else False,
+                "camera_enabled": self.var_camera_upload.get() if hasattr(self, 'var_camera_upload') else False
+            }
         }
 
         # Füge Musik-Einstellungen hinzu
@@ -795,16 +797,26 @@ class LegionMissionGenerator:
                  command=self.refresh_playlists, bg="#FF9800", fg="white").pack(side="left", padx=2)
         tk.Button(btn_frame_playlist, text="➕ Neue Playlist", 
                  command=self.create_new_playlist, bg="#4CAF50", fg="white").pack(side="left", padx=2)
-        tk.Button(btn_frame_playlist, text="🎵 Musikplayer öffnen", 
-                 command=self.open_music_player, bg="#9C27B0", fg="white").pack(side="left", padx=2)
 
-        # Lade verfügbare Playlists
-        self.refresh_playlists()
+    def create_ai_section(self, parent):
+        """Erstellt die AI & Gemini Einstellungen"""
+        lbl_ai = tk.Label(parent, text="🤖 AI & Gemini Integration:", font=("Arial", 11, "bold"))
+        lbl_ai.pack(anchor="w", pady=(15, 5))
+
+        frame_ai = tk.Frame(parent, relief=tk.GROOVE, borderwidth=1)
+        frame_ai.pack(fill="x", pady=5, padx=2)
+
+        # Gemini Enable
+        self.var_gemini_enabled = tk.BooleanVar(value=True)
+        chk_gemini = tk.Checkbutton(frame_ai, text="Gemini AI zur Entscheidungshilfe nutzen", variable=self.var_gemini_enabled)
+        chk_gemini.pack(anchor="w", padx=5)
+
+        # Camera Upload Enable
+        self.var_camera_upload = tk.BooleanVar(value=True)
+        chk_cam = tk.Checkbutton(frame_ai, text="📸 Foto-Upload bei Entscheidungen (Webcam)", variable=self.var_camera_upload)
+        chk_cam.pack(anchor="w", padx=5, pady=2)
         
-        # Setze gespeicherte Playlist
-        saved_playlist = self.music_settings.get('last_playlist')
-        if saved_playlist and saved_playlist in [self.combo_playlist.cget('values')]:
-            self.combo_playlist.set(saved_playlist)
+        tk.Label(frame_ai, text="ℹ️ Fotos werden zur Situationsanalyse an Gemini gesendet.", font=("Arial", 8), fg="gray").pack(anchor="w", padx=20)
 
     def on_music_enabled_change(self):
         """Wird aufgerufen wenn Musik aktiviert/deaktiviert wird"""

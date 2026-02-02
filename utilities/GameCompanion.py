@@ -6,25 +6,38 @@ import os
 import logging
 import sys
 
+# Optional Libraries for AI/Camera
+try:
+    import cv2
+    CV2_AVAILABLE = True
+except ImportError:
+    CV2_AVAILABLE = False
+
+try:
+    import google.generativeai as genai
+    GEMINI_AVAILABLE = True
+except ImportError:
+    GEMINI_AVAILABLE = False
+
 # Import utilities modules with compatibility for both script and package modes
 try:
     # Try relative imports first (when imported as part of utilities package)
     from .LegionData import LegionDatabase
     from .LegionRules import LegionRules
-    from .LegionUtils import get_writable_path
+    from .LegionUtils import get_writable_path, get_gemini_key
     logging.info("GameCompanion: Using relative imports")
 except ImportError:
     try:
         # Try package imports (when running with MainMenu)
         from utilities.LegionData import LegionDatabase
         from utilities.LegionRules import LegionRules
-        from utilities.LegionUtils import get_writable_path
+        from utilities.LegionUtils import get_writable_path, get_gemini_key
         logging.info("GameCompanion: Using package imports")
     except ImportError:
         # Fallback to absolute imports (when running as standalone script)
         from LegionData import LegionDatabase
         from LegionRules import LegionRules
-        from LegionUtils import get_writable_path
+        from LegionUtils import get_writable_path, get_gemini_key
         logging.info("GameCompanion: Using absolute imports")
 
 # Try to import MusicPlayer
@@ -2029,9 +2042,7 @@ class GameCompanion:
         # 3. Actions UI
         self.update_actions_ui()
 
-        # If AI, automate
-        if side == "Opponent" and self.ai_enabled.get():
-            self.root.after(1000, self.ai_perform_actions)
+        # AI automation is triggered within update_actions_ui()
 
     def perform_rally(self, unit):
         suppression = unit.get("suppression", 0)
@@ -2144,6 +2155,12 @@ class GameCompanion:
             tk.Label(f_acts, text="🤖 AI denkt nach...", font=("Segoe UI", 14, "bold"), fg="blue").pack(pady=20)
             tk.Button(f_acts, text="AI Überspringen (Manuell übernehmen)", 
                      command=self.take_manual_control, bg="#FF5722", fg="white").pack(pady=10)
+            
+            # Auto-Trigger next AI action
+            if self.actions_remaining > 0:
+                self.root.after(1500, self.ai_perform_actions)
+            else:
+                self.root.after(1500, self.end_activation)
 
     def perform_action(self, action_type):
         if self.actions_remaining <= 0 or not self.active_unit: 
@@ -2464,128 +2481,194 @@ class GameCompanion:
         tk.Button(button_frame, text="Abbrechen", command=top.destroy, 
                  bg="#9E9E9E", fg="white").pack(side="left", padx=5)
 
-    def ai_perform_actions(self):
-        # Enhanced AI Decision Making with improved movement and targeting
-        unit_name = self.active_unit["name"]
-        instructions = []
+    def capture_webcam_image(self, filename="turn_capture.jpg"):
+        if not CV2_AVAILABLE:
+            return None
+        
+        try:
+            cap = cv2.VideoCapture(0)
+            if not cap.isOpened():
+                return None
+            
+            # Warmup
+            for _ in range(5): cap.read()
+            
+            ret, frame = cap.read()
+            cap.release()
+            
+            if ret:
+                path = os.path.join(os.getcwd(), filename)
+                cv2.imwrite(path, frame)
+                return path
+            return None
+        except Exception as e:
+            logging.error(f"Camera error: {e}")
+            return None
 
-        if self.is_panicked:
-            instructions.append("1. PANIK: Einheit flieht (Sammeln von Mut).")
-            instructions.append("2. Wirft alle Missionsziele ab.")
-        else:
-            # Enhanced AI Decision Making
-            is_melee = False
-            has_ranged = False
-            max_range = 0
+    def ask_gemini_decision(self, unit, context_str):
+        if not GEMINI_AVAILABLE:
+            return "Gemini Bibliothek fehlt."
             
-            # Alle Bodeneinheiten können Nahkampf (außer Fahrzeuge)
-            unit_type = self.active_unit.get("type", "trooper")
-            can_melee = unit_type.lower() not in ["vehicle", "speeder", "walker", "creature"]
+        api_key = get_gemini_key()
+        if not api_key:
+            return "Kein API Key gefunden (gemini_key.txt fehlt oder ist leer)"
             
-            if "weapons" in self.active_unit:
-                for w in self.active_unit["weapons"]:
-                    weapon_range = w["range"][1]
-                    if weapon_range > max_range: 
-                        max_range = weapon_range
-                    if w["range"][0] == 0: 
-                        is_melee = True
-                    if weapon_range > 1:
-                        has_ranged = True
+        try:
+            genai.configure(api_key=api_key)
+            model = genai.GenerativeModel('gemini-pro-vision') # Use vision model
             
-            # AI Strategy basierend auf Situation
-            enemy_in_range = self.check_enemies_in_range()
-            # Entferne problematische Methodenaufrufe für physisches Spiel
-            # closest_enemy = self.find_closest_enemy()
-            # mission_objectives = self.get_mission_objectives()
+            # Construct Prompt
+            prompt = f"""
+            Du bist ein Star Wars Legion AI Assistent. Entscheide den zug für diese Einheit:
+            Name: {unit.get('name')}
+            Typ: {unit.get('type', 'Trooper')}
+            Waffen: {[w['name'] + ' (Range ' + str(w['range']) + ')' for w in unit.get('weapons', [])]}
+            Status: HP {unit.get('current_hp')}/{unit.get('hp')}, Suppression: {unit.get('suppression', 0)}
             
-            if not enemy_in_range:
-                # Keine Feinde in Reichweite - Intelligente Bewegung
-                instructions.append("🔄 KEINE FEINDE IN REICHWEITE:")
-                instructions.append("1. BEWEGUNG: Auf nächsten Feind zu oder Missionsziel")
-                instructions.append("2. Nach Bewegung: Erneut Reichweite prüfen")
-                if can_melee:
-                    instructions.append("3. NAHKAMPF: Bei Kontakt (alle Bodeneinheiten)")
-                instructions.append("4. ZIELEN oder AUSRÜSTUNG: Falls kein Angriff möglich")
-                
-                # Automatische Bewegung zur nächsten Einheit entfernt
-                    
-            elif is_melee or can_melee:
-                # Nahkampf bevorzugen
-                instructions.append("⚔️ NAHKAMPF STRATEGIE:")
-                instructions.append("1. NAHKAMPF-ANGRIFF: Hoher Schaden, kann nicht geblockt werden")
-                instructions.append("2. Alle Bodeneinheiten können Nahkampf ausführen")
-                instructions.append("3. ZIELEN: Falls Angriff nicht optimal")
-
-                # Automatischer Nahkampf-Versuch entfernt (existiert nicht)
-                    
-            elif has_ranged:
-                # Fernkampf mit intelligenter Zielwahl
-                instructions.append("🎯 FERNKAMPF STRATEGIE:")
-                instructions.append("1. ZIELEN: Für bessere Trefferchance")
-                instructions.append(f"2. ANGRIFF: Fernwaffen (Reichweite {max_range})")
-                instructions.append("3. AUSRÜSTUNG: Nutze verfügbare Items")
-                
+            Situation:
+            {context_str}
+            
+            Gib EINE kurze, taktisch kluge Anweisung (2-3 Sätze). Fokus auf Missionsziele oder Eliminierung.
+            """
+            
+            # Image handling
+            img_path = self.capture_webcam_image()
+            if img_path:
+                img = cv2.imread(img_path)
+                img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                from PIL import Image
+                pil_img = Image.fromarray(img_rgb)
+                response = model.generate_content([prompt, pil_img])
             else:
-                # Support und Ausrüstung
-                instructions.append("🔧 SUPPORT STRATEGIE:")
-                instructions.append("1. AUSRÜSTUNG: Nutze Unterstützungs-Items")
-                instructions.append("2. BEWEGUNG: Position für Support")
-                instructions.append("3. AUSWEICHEN oder BEREITSCHAFT")
+                # Fallback text only model if no cam
+                txt_model = genai.GenerativeModel('gemini-pro')
+                response = txt_model.generate_content(prompt)
+                
+            return response.text
+        except Exception as e:
+            return f"Gemini Error: {e}"
 
-        # Create interactive Dialog instead of just blocking info
+    def ai_perform_actions(self):
+        unit_name = self.active_unit["name"]
         
-        # Determine likely intent
-        intent = "Support"
-        if is_melee or can_melee: intent = "Melee"
-        if has_ranged and enemy_in_range: intent = "Ranged"
-        if not enemy_in_range: intent = "Move"
+        # Determine AI Settings
+        ai_set = self.mission_data.get("ai_settings", {})
+        gemini_on = ai_set.get("gemini_enabled", True)
         
-        # Dialog
-        top = tk.Toplevel(self.root)
-        top.title(f"AI Zug: {unit_name}")
-        top.geometry("500x500")
-        top.transient(self.root)
-        top.grab_set()
+        # Interactive Wizard Dialog
+        dialog = tk.Toplevel(self.root)
+        dialog.title(f"AI Entscheider: {unit_name}")
+        dialog.geometry("600x700")
+        dialog.transient(self.root)
+        dialog.grab_set()
 
-        tk.Label(top, text=f"AI PLANUNG: {unit_name}", font=("Segoe UI", 16, "bold"), fg="#2196F3").pack(pady=10)
+        tk.Label(dialog, text=f"🤖 AI Strategie: {unit_name}", font=("Segoe UI", 16, "bold"), bg="#E3F2FD", pady=10).pack(fill="x")
         
-        # Scrollable Instructions
-        f_text = tk.Frame(top, relief="groove", borderwidth=2)
-        f_text.pack(fill="both", expand=True, padx=20, pady=5)
+        # --- STEP 1: CONTEXT ---
+        f_ctx = tk.LabelFrame(dialog, text="Schritt 1: Situations-Analyse", padx=10, pady=10)
+        f_ctx.pack(fill="x", padx=10, pady=5)
         
-        instr_str = "\n".join(instructions)
-        lbl_instr = tk.Label(f_text, text=instr_str, justify="left", wraplength=450, bg="white", padx=10, pady=10)
-        lbl_instr.pack(fill="both", expand=True)
+        tk.Label(f_ctx, text="Was ist das nächste relevante Ziel?").grid(row=0, column=0, sticky="w")
+        var_target_type = tk.StringVar(value="Feind-Trupp")
+        ttk.Combobox(f_ctx, textvariable=var_target_type, values=["Feind-Trupp", "Missions-Marker", "Fahrzeug", "Rückzug"]).grid(row=0, column=1, sticky="w")
+        
+        tk.Label(f_ctx, text="Distanz zum Ziel/Feind?").grid(row=1, column=0, sticky="w")
+        var_dist = tk.StringVar(value="Range 3-4")
+        ttk.Combobox(f_ctx, textvariable=var_dist, values=["Nahkampf (Engaged)", "Range 1-2 (Nah)", "Range 3-4 (Mittel)", "Range 5+ (Fern)"]).grid(row=1, column=1, sticky="w")
+        
+        tk.Label(f_ctx, text="Ist Feind in Waffen-Reichweite?").grid(row=2, column=0, sticky="w")
+        var_in_range = tk.BooleanVar(value=True)
+        tk.Checkbutton(f_ctx, variable=var_in_range).grid(row=2, column=1, sticky="w")
 
-        tk.Label(top, text="Wie soll die AI fortfahren?", font=("bold")).pack(pady=10)
+        # --- STEP 2: DECISION ---
+        f_dec = tk.LabelFrame(dialog, text="Schritt 2: Entscheidung", padx=10, pady=10)
+        f_dec.pack(fill="both", expand=True, padx=10, pady=5)
         
-        def do_attack_check():
-            top.destroy()
-            # Launch attack helper
-            self.ai_query_targets(self.active_unit, is_melee=(intent=="Melee"))
-
-        def do_move():
-            top.destroy()
-            self.perform_action("Move")
-
-        def do_manual():
-            top.destroy()
-            # Just close, user relies on main buttons
-
-        f_btns = tk.Frame(top)
-        f_btns.pack(pady=20)
+        lbl_recommendation = tk.Label(f_dec, text="Warte auf Analyse...", font=("Segoe UI", 11, "italic"), wraplength=500, justify="left", fg="blue")
+        lbl_recommendation.pack(pady=10)
         
-        # Dynamic Buttons based on intent
-        if intent == "Move":
-            tk.Button(f_btns, text="Bewegungs-Dialog öffnen", command=do_move, bg="#4CAF50", fg="white", width=25).pack(pady=5)
+        # Logic Variables (Closure)
+        self.ai_intent = "Hold"
         
-        if intent in ["Melee", "Ranged"]:
-            tk.Button(f_btns, text="Ziele prüfen & Angreifen", command=do_attack_check, bg="#F44336", fg="white", width=25).pack(pady=5)
+        def run_local_logic():
+            # Basic logical deduction
+            u_type = self.active_unit.get("type", "Trooper").lower()
+            weapons = self.active_unit.get("weapons", [])
+            max_r = max([w["range"][1] for w in weapons]) if weapons else 0
+            is_melee_unit = any(w["range"][0] == 0 for w in weapons) and max_r < 3
             
-        tk.Button(f_btns, text="Manuell entscheiden", command=do_manual, bg="#9E9E9E", fg="white", width=25).pack(pady=5)
+            dist = var_dist.get()
+            target = var_target_type.get()
+            
+            plan = ""
+            if "Nahkampf" in dist: 
+                plan = "⚔️ Status: Im Nahkampf. \n-> Aktion: NAHKAMPF-ANGRIFF ausführen. Ziel auf Zerstörung fokussieren."
+                self.ai_intent = "Melee"
+            elif target == "Missions-Marker" and "Range 1" not in dist:
+                plan = "🏃 Ziel: Mission.\n-> Aktion: BEWEGUNG (Doppel) zum Marker."
+                self.ai_intent = "Move"
+            elif var_in_range.get():
+                if is_melee_unit and "Range 1-2" in dist:
+                     plan = "⚔️ Aggressiv (Nahkämpfer).\n-> Aktion: BEWEGUNG -> ANGRIFF (Charge) wenn möglich."
+                     self.ai_intent = "Melee"
+                else: 
+                     plan = f"🎯 Feuerkampf.\n-> Aktion: ZIELEN -> ANGRIFF (Range {max_r}). Stationär bleiben für Deckung/Aim."
+                     self.ai_intent = "Ranged"
+            else:
+                # Out of range
+                plan = "🏃 Annäherung.\n-> Aktion: BEWEGUNG -> In Deckung gehen oder 2. Bewegung."
+                self.ai_intent = "Move"
+                
+            lbl_recommendation.config(text=plan, fg="black", font=("Segoe UI", 11, "bold"))
+            btn_exec_move.config(state="normal" if "BEWEGUNG" in plan else "disabled")
+            btn_exec_atk.config(state="normal" if "ANGRIFF" in plan else "disabled")
+
+        def run_gemini_logic():
+            lbl_recommendation.config(text="⏳ Gemini analysiert Foto & Daten...", fg="orange")
+            dialog.update()
+            
+            context = f"Ziel: {var_target_type.get()}, Distanz: {var_dist.get()}, In Reichweite: {var_in_range.get()}"
+            advice = self.ask_gemini_decision(self.active_unit, context)
+            
+            lbl_recommendation.config(text=f"🤖 GEMINI SAGT:\n{advice}", fg="purple")
+            
+            # Simple intent parsing
+            if "beweg" in advice.lower() or "move" in advice.lower():
+                self.ai_intent = "Move"
+            if "angriff" in advice.lower() or "attack" in advice.lower():
+                self.ai_intent = "Ranged" # Default to attack check
+
+        btn_local = tk.Button(f_dec, text="⚡ Logik-Analyse", command=run_local_logic, bg="#ddd")
+        btn_local.pack(side="left", padx=5)
         
-        # Don't execute legacy code
-        return
+        if gemini_on and GEMINI_AVAILABLE:
+            btn_gemini = tk.Button(f_dec, text="✨ Gemini Fragen (Webcam)", command=run_gemini_logic, bg="#E1BEE7")
+            btn_gemini.pack(side="left", padx=5)
+            
+        # --- STEP 3: EXECUTE ---
+        f_exec = tk.Frame(dialog, pady=10)
+        f_exec.pack(fill="x", padx=10)
+        
+        def exe_move():
+            dialog.destroy()
+            self.open_move_dialog()
+            
+        def exe_attack():
+            dialog.destroy()
+            # Launch attack helper
+            is_melee = (self.ai_intent == "Melee")
+            self.ai_query_targets(self.active_unit, is_melee=is_melee)
+            
+        def exe_manual():
+            dialog.destroy()
+            
+        btn_exec_move = tk.Button(f_exec, text="Bewegung ausführen", command=exe_move, bg="#4CAF50", fg="white", width=20)
+        btn_exec_move.pack(side="left", padx=5)
+        
+        btn_exec_atk = tk.Button(f_exec, text="Angriff ausführen", command=exe_attack, bg="#F44336", fg="white", width=20)
+        btn_exec_atk.pack(side="left", padx=5)
+        
+        tk.Button(f_exec, text="Manuell", command=exe_manual, bg="#9E9E9E", fg="white").pack(side="right", padx=5)
 
     def find_closest_enemy(self):
         """Findet den nächsten Feind für AI-Bewegung (vereinfacht)"""

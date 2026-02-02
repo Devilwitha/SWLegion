@@ -10,8 +10,14 @@ def get_data_path(relative_path):
         # Running as PyInstaller executable - use _internal path
         return os.path.join(sys._MEIPASS, relative_path)
     else:
-        # Running as Python script - use relative path
-        return relative_path
+        # Running as Python script - resolve relative to project root
+        # utilities/LegionUtils.py -> utilities -> Project Root
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        
+        # If relative path starts with "utilities/", adjust
+        # Because base_dir is already ../utilities/..
+        
+        return os.path.join(base_dir, relative_path)
 
 def get_writable_path(folder_name):
     """
@@ -123,25 +129,55 @@ def setup_logging(log_file="legion_app.log"):
 
     logging.info("Enhanced logging initialized with exception capture.")
 
-def get_gemini_key(key_file="gemini_key.txt"):
+def get_gemini_key(filename="gemini_key.txt"):
     """
-    Retrieves the Gemini API Key from the specified file.
+    Retrieves the Gemini API Key from the project root.
     If the file does not exist, it creates it with a placeholder.
     Returns the key string if valid, or None if missing/placeholder.
     """
+    # Use get_data_path to find the file in the project root
+    # or fallback to adjacent to executable/script
+    
+    # Strategy 1: Project Root via get_data_path
+    key_path = get_data_path(filename)
+    
+    # Strategy 2: If that returns a bundled path (MEIPASS) and we want to allow user editing,
+    # we might prefer looking in the same folder as the exe first.
+    if getattr(sys, 'frozen', False):
+        exe_dir = os.path.dirname(sys.executable)
+        key_path_exe = os.path.join(exe_dir, filename)
+        if os.path.exists(key_path_exe):
+            key_path = key_path_exe
+        else:
+            # If not found next to exe, use the one in MEIPASS or fall back to it
+            # But wait, MEIPASS is read-only usually. 
+            # If we want the user to provide a key, it should probably be in the exe dir.
+            key_path = key_path_exe
+
     placeholder = "BITTE_HIER_API_KEY_EINFUEGEN"
 
-    if not os.path.exists(key_file):
+    if not os.path.exists(key_path):
         try:
-            # Ensure directory exists
-            os.makedirs(os.path.dirname(key_file), exist_ok=True)
-            with open(key_file, "w", encoding="utf-8") as f:
+            # Only try to create if it's not in a read-only location (simplified check)
+            # Just try to create in current location (which for frozen is next to exe)
+            with open(key_path, "w", encoding="utf-8") as f:
                 f.write(placeholder)
-            logging.warning(f"API Key file '{key_file}' not found. Created placeholder file.")
+            logging.warning(f"API Key file '{key_path}' not found. Created placeholder file.")
             return None
         except Exception as e:
-            logging.error(f"Failed to create key file '{key_file}': {e}")
+            logging.error(f"Failed to create key file '{key_path}': {e}")
+            # Try falling back to a writable user directory if permission denied?
             return None
+            
+    try:
+        with open(key_path, "r", encoding="utf-8") as f:
+            key = f.read().strip()
+        if key == placeholder or not key:
+            return None
+        return key
+    except Exception as e:
+        logging.error(f"Error reading key file: {e}")
+        return None
 
     try:
         with open(key_file, "r", encoding="utf-8") as f:

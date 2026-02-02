@@ -1,2 +1,5 @@
 Pillow
 requests
+pygame
+opencv-python
+google-generativeai

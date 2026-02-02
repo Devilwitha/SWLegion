@@ -63,6 +63,12 @@ class CustomFactoryMenu:
         try:
             logging.info(f"CustomFactory launching: {script_name}")
             
+            # Use import always for better reliability (even in script mode)
+            # This ensures we don't have path issues
+            if self.run_module_directly(script_name):
+                return
+
+            # Legacy fallback code below (only if direct import somehow fails/returns False)
             # Check if running as PyInstaller executable
             is_frozen = getattr(sys, 'frozen', False)
             has_meipass = hasattr(sys, '_MEIPASS')
@@ -194,17 +200,13 @@ class CustomFactoryMenu:
                 except Exception as ee:
                     logging.error(f"Failed to create CardPrinter instance: {ee}", exc_info=True)
                     raise
-            else:
-                logging.warning(f"Module {script_name} not configured for direct execution")
-                messagebox.showwarning("Warnung", f"Modul {script_name} nicht für direkte Ausführung konfiguriert")
-        except ImportError as e:
-            error_msg = f"Import error for {script_name}: {str(e)}"
-            logging.error(error_msg, exc_info=True)
-            messagebox.showerror("Import Fehler", f"Modul konnte nicht importiert werden: {script_name}\n\nFehler: {str(e)}\n\nSiehe Log für Details.")
+                    
+            return True # Success
+            
         except Exception as e:
-            error_msg = f"Error running {script_name}: {str(e)}"
-            logging.error(error_msg, exc_info=True)
-            messagebox.showerror("Fehler", f"Fehler beim Starten von {script_name}:\n\n{str(e)}\n\nSiehe Log für Details.")
+            logging.error(f"Direct import failed for {script_name}: {e}")
+            return False
+
 
     def open_catalog_editor(self):
         """Öffne einen einfachen Editor für catalog.json"""
@@ -212,23 +214,26 @@ class CustomFactoryMenu:
         from tkinter import filedialog, scrolledtext
         
         try:
-            # Versuche catalog.json zu laden - suche in verschiedenen Pfaden
+            # Versuche catalog.json zu laden - suche relativ zum Script
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            root_dir = os.path.dirname(current_dir) # SWLegion/
+            
             possible_paths = [
-                "catalog.json",
-                os.path.join("db", "catalog.json"),
-                os.path.join("..", "catalog.json"),
-                os.path.join("..", "db", "catalog.json")
+                os.path.join(root_dir, "db", "catalog.json"), # Preferred location
+                os.path.join(root_dir, "catalog.json"),
+                # Fallback for frozen executable
+                os.path.join(sys._MEIPASS, "db", "catalog.json") if hasattr(sys, '_MEIPASS') else None
             ]
             
             catalog_path = None
             for path in possible_paths:
-                if os.path.exists(path):
+                if path and os.path.exists(path):
                     catalog_path = path
                     break
             
             if not catalog_path:
                 messagebox.showerror("Fehler", 
-                                   f"catalog.json nicht gefunden!\n\nSuchpfade:\n" + "\n".join(possible_paths))
+                                   f"catalog.json nicht gefunden!\n\nGesucht in:\n{root_dir}\\db\\catalog.json\n{root_dir}\\catalog.json")
                 return
             
             with open(catalog_path, "r", encoding="utf-8") as f:
