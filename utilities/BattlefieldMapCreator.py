@@ -158,8 +158,14 @@ class BattlefieldMapCreator:
 
         f = filedialog.asksaveasfilename(defaultextension=".json", filetypes=[("JSON", "*.json")])
         if f:
-            with open(f, "w") as file:
-                json.dump(items, file)
+            try:
+                # Ensure directory exists
+                os.makedirs(os.path.dirname(f), exist_ok=True)
+                with open(f, "w") as file:
+                    json.dump(items, file)
+                messagebox.showinfo("Erfolg", f"Karte gespeichert: {f}")
+            except Exception as e:
+                messagebox.showerror("Fehler", f"Fehler beim Speichern: {e}")
 
     def load_map(self):
         f = filedialog.askopenfilename(filetypes=[("JSON", "*.json")])
@@ -216,8 +222,13 @@ class BattlefieldMapCreator:
                     # Simplified text draw
                     draw.text((coords[0], coords[1]), text, fill="black")
 
-            img.save(f)
-            messagebox.showinfo("Export", "Bild gespeichert.")
+            try:
+                # Ensure directory exists
+                os.makedirs(os.path.dirname(f), exist_ok=True)
+                img.save(f)
+                messagebox.showinfo("Export", f"Bild gespeichert: {f}")
+            except Exception as e:
+                messagebox.showerror("Fehler", f"Fehler beim Export: {e}")
 
 if __name__ == "__main__":
     root = tk.Tk()

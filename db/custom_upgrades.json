@@ -1,0 +1,15 @@
+[
+    {
+        "name": "65",
+        "type": "Gear",
+        "points": 500,
+        "text": "xydgsydg",
+        "restricted_to": [
+            "Galaktisches Imperium",
+            "TT"
+        ],
+        "adds_mini": true,
+        "id": "5209ef96-44d2-4fd3-94e5-e3704bb2cc70",
+        "is_custom": true
+    }
+]

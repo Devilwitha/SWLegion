@@ -10,10 +10,10 @@ class CardPrinter:
         self.root.title("SW Legion: Card Printer (Layout Designer)")
         self.root.geometry("1000x700")
 
-        self.custom_units_file = "custom_units.json"
-        self.custom_cards_file = "custom_command_cards.json"
-        self.custom_upgrades_file = "custom_upgrades.json"
-        self.custom_battle_file = "custom_battle_cards.json"
+        self.custom_units_file = "db/custom_units.json"
+        self.custom_cards_file = "db/custom_command_cards.json"
+        self.custom_upgrades_file = "db/custom_upgrades.json"
+        self.custom_battle_file = "db/custom_battle_cards.json"
 
         self.units_data = self.load_json(self.custom_units_file)
         self.cards_data = self.load_json(self.custom_cards_file)

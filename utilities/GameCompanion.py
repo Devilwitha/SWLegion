@@ -4,9 +4,20 @@ import json
 import random
 import os
 import logging
-from LegionData import LegionDatabase
-from LegionRules import LegionRules
-from PIL import Image, ImageTk
+import sys
+
+# Add parent directory to path for imports when running as executable
+if getattr(sys, 'frozen', False):
+    # Running as PyInstaller executable
+    import sys
+    sys.path.append(os.path.dirname(sys.executable))
+    from utilities.LegionData import LegionDatabase
+    from utilities.LegionRules import LegionRules
+else:
+    # Running as Python script
+    from LegionData import LegionDatabase
+    from LegionRules import LegionRules
+
 from PIL import Image, ImageTk
 
 class GameCompanion:
@@ -21,11 +32,22 @@ class GameCompanion:
         
         # Set window icon
         try:
-            icon_img = Image.open("bilder/SW_legion_logo.png")
-            icon_img = icon_img.resize((32, 32), Image.Resampling.LANCZOS)
-            self.icon_photo = ImageTk.PhotoImage(icon_img)
-            self.root.iconphoto(True, self.icon_photo)
-        except:
+            # Get resource path for executable
+            if getattr(sys, 'frozen', False):
+                # Running as executable
+                base_path = os.path.dirname(sys.executable)
+                icon_path = os.path.join(base_path, "bilder", "SW_legion_logo.png")
+            else:
+                # Running as script
+                icon_path = "bilder/SW_legion_logo.png"
+            
+            if os.path.exists(icon_path):
+                icon_img = Image.open(icon_path)
+                icon_img = icon_img.resize((32, 32), Image.Resampling.LANCZOS)
+                self.icon_photo = ImageTk.PhotoImage(icon_img)
+                self.root.iconphoto(True, self.icon_photo)
+        except Exception as e:
+            logging.warning(f"Could not load icon: {e}")
             pass
 
         # Game State
@@ -102,6 +124,22 @@ class GameCompanion:
         self.paned.add(self.frame_opponent)
         tk.Label(self.frame_opponent, text="Gegner Armee (AI)", font=("Segoe UI", 12, "bold"), bg="#ffcdd2", pady=5).pack(fill="x")
         self.tree_opponent = self.create_unit_tree(self.frame_opponent)
+        
+        # AI aktiviert Checkbox und Test-Buttons
+        controls_frame = tk.Frame(self.frame_opponent)
+        controls_frame.pack(pady=5)
+        
+        self.ai_enabled = tk.BooleanVar(value=True)
+        chk_ai = tk.Checkbutton(controls_frame, text="AI Aktiv", variable=self.ai_enabled)
+        chk_ai.pack(side=tk.LEFT, padx=5)
+        
+        # TEST: Add marker test buttons
+        tk.Button(controls_frame, text="🎯 Test Marker", 
+                 command=self.test_add_markers, bg="#FF9800", fg="white", 
+                 font=("Segoe UI", 9)).pack(side=tk.LEFT, padx=2)
+        tk.Button(controls_frame, text="🧹 Reset Marker", 
+                 command=self.test_reset_markers, bg="#607D8B", fg="white", 
+                 font=("Segoe UI", 9)).pack(side=tk.LEFT, padx=2)
 
     def create_unit_tree(self, parent):
         cols = ("Name", "Minis", "HP", "Status")
@@ -202,6 +240,21 @@ class GameCompanion:
                 status = "Offener Befehl"
             else:
                 status = "Bereit"
+            
+            # Add markers to status
+            markers = []
+            if u.get("aim", 0) > 0:
+                markers.append(f"🎯{u['aim']}")
+            if u.get("dodge", 0) > 0:
+                markers.append(f"💨{u['dodge']}")
+            if u.get("suppression", 0) > 0:
+                markers.append(f"📉{u['suppression']}")
+            if u.get("standby", False):
+                markers.append("⏸️")
+            
+            if markers:
+                status += f" {' '.join(markers)}"
+            
             minis = u.get("minis", 1)
             tree.insert("", "end", values=(u["name"], minis, f"{u['current_hp']}/{u['hp']}", status))
 
@@ -927,7 +980,21 @@ class GameCompanion:
         f_status = tk.Frame(self.frame_center, bg="#eee", pady=5)
         f_status.pack(fill="x")
 
-        tk.Label(f_status, text=f"Aktionen: {self.actions_remaining} | Suppression: {self.active_unit.get('suppression', 0)}", font=("bold"), bg="#eee").pack()
+        # Show current unit's markers
+        aim_count = self.active_unit.get("aim", 0)
+        dodge_count = self.active_unit.get("dodge", 0)
+        suppression_count = self.active_unit.get("suppression", 0)
+        
+        status_text = f"Aktionen: {self.actions_remaining}"
+        if aim_count > 0:
+            status_text += f" | 🎯 Zielen: {aim_count}"
+        if dodge_count > 0:
+            status_text += f" | 💨 Ausweichen: {dodge_count}"
+        if suppression_count > 0:
+            status_text += f" | 📉 Niederhalten: {suppression_count}"
+            
+        tk.Label(f_status, text=status_text, font=("bold"), bg="#eee").pack()
+        
         if self.is_panicked:
             tk.Label(f_status, text="PANIK! Keine Aktionen.", fg="red", bg="#eee").pack()
         if self.is_suppressed:
@@ -977,8 +1044,10 @@ class GameCompanion:
             return # Don't decrement yet
         elif action_type == "Aim":
             self.active_unit["aim"] = self.active_unit.get("aim", 0) + 1
+            messagebox.showinfo("Zielen", f"{self.active_unit['name']} erhält 1 Zielmarker.\nGesamt: 🎯{self.active_unit['aim']}")
         elif action_type == "Dodge":
             self.active_unit["dodge"] = self.active_unit.get("dodge", 0) + 1
+            messagebox.showinfo("Ausweichen", f"{self.active_unit['name']} erhält 1 Ausweichmarker.\nGesamt: 💨{self.active_unit['dodge']}")
         elif action_type == "Standby":
             self.active_unit["standby"] = True
         elif action_type == "Recover":
@@ -1381,6 +1450,62 @@ class GameCompanion:
             self.update_tree(self.tree_player, self.player_army["units"])
         if self.opponent_army["units"]:
             self.update_tree(self.tree_opponent, self.opponent_army["units"])
+    
+    def test_add_markers(self):
+        """TEST: Add sample markers to first units for testing"""
+        if self.player_army["units"]:
+            unit = self.player_army["units"][0]
+            unit["aim"] = unit.get("aim", 0) + 2
+            unit["dodge"] = unit.get("dodge", 0) + 1
+            unit["suppression"] = unit.get("suppression", 0) + 1
+            
+        if self.opponent_army["units"]:
+            unit = self.opponent_army["units"][0]
+            unit["aim"] = unit.get("aim", 0) + 1
+            unit["dodge"] = unit.get("dodge", 0) + 2
+            
+        self.update_trees()
+        messagebox.showinfo("Test", "Marker zu ersten Einheiten hinzugefügt!\nSiehe Listen für 🎯💨📉")
+    
+    def test_reset_markers(self):
+        """TEST: Reset all markers"""
+        for army in [self.player_army, self.opponent_army]:
+            for unit in army.get("units", []):
+                unit.pop("aim", None)
+                unit.pop("dodge", None) 
+                unit.pop("suppression", None)
+                unit.pop("standby", None)
+        
+        self.update_trees()
+        messagebox.showinfo("Test", "Alle Marker zurückgesetzt!")
+    
+    def test_add_markers(self):
+        """TEST: Add sample markers to first units for testing"""
+        if self.player_army["units"]:
+            unit = self.player_army["units"][0]
+            unit["aim"] = unit.get("aim", 0) + 2
+            unit["dodge"] = unit.get("dodge", 0) + 1
+            unit["suppression"] = unit.get("suppression", 0) + 1
+            
+        if self.opponent_army["units"]:
+            unit = self.opponent_army["units"][0]
+            unit["aim"] = unit.get("aim", 0) + 1
+            unit["dodge"] = unit.get("dodge", 0) + 2
+            
+        self.update_trees()
+        messagebox.showinfo("Test", "Marker zu ersten Einheiten hinzugefügt!\nSiehe Listen für 🎯💨📉")
+    
+    def test_reset_markers(self):
+        """TEST: Reset all markers"""
+        for army in [self.player_army, self.opponent_army]:
+            for unit in army.get("units", []):
+                unit.pop("aim", None)
+                unit.pop("dodge", None) 
+                unit.pop("suppression", None)
+                unit.pop("standby", None)
+        
+        self.update_trees()
+        messagebox.showinfo("Test", "Alle Marker zurückgesetzt!")
 
     def open_attack_dialog(self, pre_target=None, pre_weapon=None):
         if not self.active_unit: return
@@ -1456,6 +1581,9 @@ class GameCompanion:
                 # Load Default Cover from unit state
                 def_cover = target_unit.get("cover_status", 0)
                 var_cover.set(def_cover)
+                # Load Dodge markers from target unit
+                dodge_count = target_unit.get("dodge", 0)
+                var_dodge.set(dodge_count)
 
         cb_target.bind("<<ComboboxSelected>>", on_target_select)
 
@@ -1466,7 +1594,13 @@ class GameCompanion:
         tk.Radiobutton(frame_target, text="Schwer (2)", variable=var_cover, value=2).grid(row=2, column=3, sticky="w")
 
         tk.Label(frame_target, text="Ausweichen-Marker (Dodge):").grid(row=3, column=0, sticky="w")
-        var_dodge = tk.IntVar(value=0)
+        # Auto-fill dodge markers if pre_target is set
+        initial_dodge = 0
+        if pre_target:
+            target_unit = next((u for u in targets if u["name"] == pre_target), None)
+            if target_unit:
+                initial_dodge = target_unit.get("dodge", 0)
+        var_dodge = tk.IntVar(value=initial_dodge)
         tk.Spinbox(frame_target, from_=0, to=10, textvariable=var_dodge, width=5).grid(row=3, column=1, sticky="w")
 
         tk.Label(frame_target, text="Zielen-Marker (Aim) [Angreifer]:").grid(row=4, column=0, sticky="w", pady=(10,0))
@@ -1475,6 +1609,20 @@ class GameCompanion:
 
         # Buttons Control Variable
         self.attack_rolled = False
+        
+        # Auto-fill Aim markers if unit has them
+        unit_aim = unit.get("aim", 0)
+        if unit_aim > 0:
+            var_aim.set(unit_aim)
+        
+        # Display current marker status in UI
+        if unit_aim > 0 or unit.get("dodge", 0) > 0 or unit.get("suppression", 0) > 0:
+            marker_status = []
+            if unit_aim > 0: marker_status.append(f"🎯{unit_aim}")
+            if unit.get("dodge", 0) > 0: marker_status.append(f"💨{unit['dodge']}")
+            if unit.get("suppression", 0) > 0: marker_status.append(f"📉{unit['suppression']}")
+            tk.Label(frame_target, text=f"Angreifer-Marker: {' '.join(marker_status)}", 
+                    fg="#4CAF50", font=("Segoe UI", 9, "bold")).grid(row=4, column=2, columnspan=2, sticky="w", pady=(10,0))
 
         # 3. ERGEBNIS BEREICH
         frame_result = tk.LabelFrame(top, text="3. Ergebnis", padx=10, pady=10, bg="#e0f7fa")
@@ -1743,8 +1891,22 @@ class GameCompanion:
                     if suppr_val > 0:
                         target_unit["suppression"] = target_unit.get("suppression", 0) + suppr_val
 
+                    # Remove used Aim markers
+                    aim_used = var_aim.get()
+                    if aim_used > 0:
+                        unit["aim"] = max(0, unit.get("aim", 0) - aim_used)
+
+                    # Remove used Dodge markers (they were already calculated in the attack)
+                    dodges_available = var_dodge.get()
+                    if dodges_available > 0:
+                        # Dodge markers are consumed when used, clear them
+                        target_unit["dodge"] = 0
+
                     self.update_trees()
-                    messagebox.showinfo("Update", f"{target_unit['name']}:\n-{wounds} HP\n+{suppr_val} Suppression")
+                    message = f"{target_unit['name']}:\n-{wounds} HP\n+{suppr_val} Suppression\nZielmarker verbraucht: {aim_used}"
+                    if dodges_available > 0:
+                        message += f"\nAusweichen-Marker verbraucht: {dodges_available}"
+                    messagebox.showinfo("Update", message)
                     on_complete() # Decrement Action
                     top.destroy()
 
