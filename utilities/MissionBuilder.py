@@ -48,6 +48,11 @@ class LegionMissionGenerator:
         self.api_key = self.load_api_key()
         self.current_scenario_text = ""
         
+        # Musik-Einstellungen
+        self.music_enabled = False
+        self.selected_playlist = None
+        self.music_settings = self.load_music_settings()
+        
         # --- Daten ---
         self.fraktionen = [
             "Galaktisches Imperium",
@@ -130,6 +135,9 @@ class LegionMissionGenerator:
         self.entry_runden = tk.Entry(frame_settings, font=("Arial", 10))
         self.entry_runden.insert(0, "6")
         self.entry_runden.pack(fill="x", pady=5)
+
+        # 3c. MUSIK EINSTELLUNGEN
+        self.create_music_section(frame_settings)
 
         # 4. BUTTON
         btn_gen = tk.Button(
@@ -236,6 +244,7 @@ class LegionMissionGenerator:
         btn_frame.pack(pady=20)
 
         tk.Button(btn_frame, text="💾 Mission Speichern", command=self.save_mission, bg="#4CAF50", fg="white", font=("bold", 12)).pack(side=tk.LEFT, padx=10)
+        tk.Button(btn_frame, text="🎮 Spiel starten", command=self.start_game, bg="#2196F3", fg="white", font=("bold", 12)).pack(side=tk.LEFT, padx=10)
         tk.Button(btn_frame, text="✏ Schlachtfeld-Planer öffnen", command=self.launch_map_creator, bg="#9C27B0", fg="white", font=("bold", 12)).pack(side=tk.LEFT, padx=10)
 
         # Draw Initial
@@ -247,6 +256,37 @@ class LegionMissionGenerator:
             subprocess.Popen([sys.executable, script_name])
         else:
             messagebox.showerror("Fehler", "BattlefieldMapCreator.py nicht gefunden.")
+
+    def start_game(self):
+        """Lädt eine gespeicherte Mission und startet das Spiel mit Musik"""
+        from tkinter import filedialog
+        try:
+            initial_dir = get_writable_path("Missions")
+            file_path = filedialog.askopenfilename(
+                initialdir=initial_dir,
+                title="Mission zum Starten auswählen",
+                filetypes=[("JSON", "*.json")]
+            )
+            
+            if file_path:
+                # Ermittle den Pfad zu GameCompanion.py relativ zum aktuellen Script
+                current_dir = os.path.dirname(os.path.abspath(__file__))
+                # Falls MissionBuilder in utilities liegt:
+                script_path = os.path.join(current_dir, "GameCompanion.py")
+                
+                if not os.path.exists(script_path):
+                     # Falls wir nicht in utilities sind, versuche absoluten Pfad zu rekonstruieren
+                     # Das hier ist ein Fallback
+                     script_path = os.path.abspath(os.path.join("utilities", "GameCompanion.py"))
+
+                if os.path.exists(script_path):
+                    # Starte GameCompanion als separaten Prozess mit dem Missions-Pfad als Argument
+                    subprocess.Popen([sys.executable, script_path, file_path])
+                else:
+                    messagebox.showerror("Fehler", f"GameCompanion nicht gefunden unter:\n{script_path}")
+                    
+        except Exception as e:
+            messagebox.showerror("Fehler", f"Fehler beim Starten des Spiels: {e}")
 
     def random_deploy(self):
         # Update values in case custom ones changed (simplified)
@@ -350,6 +390,15 @@ class LegionMissionGenerator:
             "scenario_text": self.current_scenario_text
         }
 
+        # Füge Musik-Einstellungen hinzu
+        if hasattr(self, 'music_enabled_var') and self.music_enabled_var.get():
+            data["music"] = {
+                "enabled": True,
+                "playlist": self.combo_playlist.get(),
+                "volume": self.music_settings.get('volume', 70)
+            }
+            self.save_music_settings()
+
         if not data["blue_faction"] or not data["red_faction"]:
             messagebox.showwarning("Fehler", "Bitte weise beiden Seiten eine Fraktion zu.")
             return
@@ -362,6 +411,11 @@ class LegionMissionGenerator:
                 with open(file_path, 'w', encoding='utf-8') as f:
                     json.dump(data, f, indent=4, ensure_ascii=False)
                 messagebox.showinfo("Gespeichert", f"Mission gespeichert in:\n{file_path}")
+                
+                # Musik-Einstellungen speichern (aber nicht starten)
+                if data.get("music", {}).get("enabled"):
+                    self.save_music_settings()
+                    
             except Exception as e:
                 messagebox.showerror("Fehler", f"Fehler beim Speichern: {e}")
 
@@ -706,6 +760,203 @@ class LegionMissionGenerator:
                 self.txt_output.insert(tk.END, f"\nAPI Fehler ({response.status_code}): {response.text}")
         except Exception as e:
             self.txt_output.insert(tk.END, f"\nVerbindungsfehler: {e}")
+
+    def create_music_section(self, parent):
+        """Erstellt die Musik-Einstellungen Sektion"""
+        lbl_musik = tk.Label(parent, text="🎵 Musik Einstellungen:", font=("Arial", 11, "bold"))
+        lbl_musik.pack(anchor="w", pady=(15, 5))
+
+        frame_musik = tk.Frame(parent, relief=tk.GROOVE, borderwidth=1)
+        frame_musik.pack(fill="x", pady=5, padx=2)
+
+        # Musik An/Aus Checkbox
+        self.music_enabled_var = tk.BooleanVar(value=self.music_settings.get('enabled', False))
+        chk_music = tk.Checkbutton(frame_musik, text="Mission mit Musik abspielen", 
+                                  variable=self.music_enabled_var,
+                                  command=self.on_music_enabled_change)
+        chk_music.pack(anchor="w", padx=5, pady=5)
+
+        # Playlist Frame (nur sichtbar wenn Musik aktiviert)
+        self.playlist_frame = tk.Frame(frame_musik)
+        if self.music_enabled_var.get():
+            self.playlist_frame.pack(fill="x", padx=5, pady=5)
+
+        tk.Label(self.playlist_frame, text="Playlist auswählen:").pack(anchor="w")
+        
+        # Playlist Combobox
+        self.combo_playlist = ttk.Combobox(self.playlist_frame, state="readonly", width=40)
+        self.combo_playlist.pack(fill="x", pady=2)
+        
+        # Playlist Buttons
+        btn_frame_playlist = tk.Frame(self.playlist_frame)
+        btn_frame_playlist.pack(fill="x", pady=5)
+        
+        tk.Button(btn_frame_playlist, text="🔄 Playlists aktualisieren", 
+                 command=self.refresh_playlists, bg="#FF9800", fg="white").pack(side="left", padx=2)
+        tk.Button(btn_frame_playlist, text="➕ Neue Playlist", 
+                 command=self.create_new_playlist, bg="#4CAF50", fg="white").pack(side="left", padx=2)
+        tk.Button(btn_frame_playlist, text="🎵 Musikplayer öffnen", 
+                 command=self.open_music_player, bg="#9C27B0", fg="white").pack(side="left", padx=2)
+
+        # Lade verfügbare Playlists
+        self.refresh_playlists()
+        
+        # Setze gespeicherte Playlist
+        saved_playlist = self.music_settings.get('last_playlist')
+        if saved_playlist and saved_playlist in [self.combo_playlist.cget('values')]:
+            self.combo_playlist.set(saved_playlist)
+
+    def on_music_enabled_change(self):
+        """Wird aufgerufen wenn Musik aktiviert/deaktiviert wird"""
+        if self.music_enabled_var.get():
+            self.playlist_frame.pack(fill="x", padx=5, pady=5)
+        else:
+            self.playlist_frame.pack_forget()
+        self.save_music_settings()
+
+    def refresh_playlists(self):
+        """Lädt verfügbare Playlists neu"""
+        try:
+            # Bestimme Playlist-Verzeichnis
+            if getattr(sys, 'frozen', False):
+                # EXE Modus
+                exe_dir = os.path.dirname(sys.executable)
+                playlist_dir = os.path.join(exe_dir, "playlist")
+            else:
+                # Script Modus
+                project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                playlist_dir = os.path.join(project_dir, "playlist")
+            
+            if not os.path.exists(playlist_dir):
+                self.combo_playlist['values'] = ["Keine Playlists gefunden"]
+                return
+                
+            # Lade Playlist-Namen
+            playlists = []
+            for file_name in os.listdir(playlist_dir):
+                if file_name.endswith('.json'):
+                    try:
+                        playlist_path = os.path.join(playlist_dir, file_name)
+                        with open(playlist_path, 'r', encoding='utf-8') as f:
+                            playlist_data = json.load(f)
+                            playlist_name = playlist_data.get('name', file_name[:-5])
+                            playlists.append(playlist_name)
+                    except:
+                        continue
+            
+            self.combo_playlist['values'] = playlists if playlists else ["Keine Playlists gefunden"]
+            
+        except Exception as e:
+            self.combo_playlist['values'] = ["Fehler beim Laden der Playlists"]
+
+    def create_new_playlist(self):
+        """Öffnet Dialog zum Erstellen einer neuen Playlist"""
+        try:
+            from utilities.MusicPlayer import MusicPlayer
+            new_window = tk.Toplevel(self.root)
+            new_window.withdraw()
+            music_player = MusicPlayer(new_window)
+            new_window.deiconify()
+            music_player.create_new_playlist()
+        except Exception as e:
+            messagebox.showerror("Fehler", f"Konnte Musikplayer nicht öffnen: {e}")
+
+    def open_music_player(self):
+        """Öffnet den Musikplayer"""
+        try:
+            from utilities.MusicPlayer import MusicPlayer
+            new_window = tk.Toplevel(self.root)
+            new_window.withdraw()
+            music_player = MusicPlayer(new_window)
+            new_window.deiconify()
+        except Exception as e:
+            messagebox.showerror("Fehler", f"Konnte Musikplayer nicht öffnen: {e}")
+
+    def load_music_settings(self):
+        """Lädt gespeicherte Musik-Einstellungen"""
+        try:
+            settings_dir = get_writable_path("settings")
+            settings_file = os.path.join(settings_dir, "mission_music_settings.json")
+            if os.path.exists(settings_file):
+                with open(settings_file, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+        except:
+            pass
+        return {
+            'enabled': False,
+            'last_playlist': None,
+            'volume': 70,
+            'current_song': None
+        }
+
+    def save_music_settings(self):
+        """Speichert Musik-Einstellungen"""
+        try:
+            settings = {
+                'enabled': self.music_enabled_var.get(),
+                'last_playlist': self.combo_playlist.get() if hasattr(self, 'combo_playlist') else None,
+                'volume': self.music_settings.get('volume', 70),
+                'current_song': self.music_settings.get('current_song')
+            }
+            
+            settings_dir = get_writable_path("settings")
+            settings_file = os.path.join(settings_dir, "mission_music_settings.json")
+            with open(settings_file, 'w', encoding='utf-8') as f:
+                json.dump(settings, f, indent=2, ensure_ascii=False)
+            
+            self.music_settings = settings
+        except Exception as e:
+            print(f"Fehler beim Speichern der Musik-Einstellungen: {e}")
+
+    def start_mission_with_music(self, mission_data):
+        """Startet Mission mit Musik falls aktiviert"""
+        if not self.music_enabled_var.get():
+            return
+            
+        selected_playlist = self.combo_playlist.get()
+        if not selected_playlist or selected_playlist == "Keine Playlists gefunden":
+            return
+            
+        try:
+            # Speichere Mission mit Musik-Info
+            mission_data['music'] = {
+                'enabled': True,
+                'playlist': selected_playlist,
+                'volume': self.music_settings.get('volume', 70)
+            }
+            
+            # Öffne Musikplayer mit der Playlist
+            self.launch_music_player_with_playlist(selected_playlist)
+            
+        except Exception as e:
+            print(f"Fehler beim Starten der Mission mit Musik: {e}")
+
+    def launch_music_player_with_playlist(self, playlist_name):
+        """Startet den Musikplayer mit einer bestimmten Playlist"""
+        try:
+            from utilities.MusicPlayer import MusicPlayer
+            import threading
+            
+            def start_music():
+                new_window = tk.Toplevel(self.root)
+                new_window.withdraw()
+                music_player = MusicPlayer(new_window)
+                
+                # Lade und spiele die Playlist
+                if playlist_name in music_player.playlists:
+                    playlist_data = music_player.playlists[playlist_name]
+                    music_player.current_playlist = playlist_data.get('tracks', [])
+                    if music_player.current_playlist:
+                        music_player.current_track_index = 0
+                        music_player.play_current_track()
+                
+                new_window.deiconify()
+            
+            # Starte in separatem Thread um UI nicht zu blockieren
+            threading.Thread(target=start_music, daemon=True).start()
+            
+        except Exception as e:
+            messagebox.showerror("Fehler", f"Konnte Musikplayer nicht starten: {e}")
 
 if __name__ == "__main__":
     root = tk.Tk()

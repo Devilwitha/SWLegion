@@ -8,9 +8,19 @@ import sys
 from pathlib import Path
 from datetime import datetime
 
+# Import Settings Manager
+try:
+    from .MusicSettingsManager import MusicSettingsManager
+except ImportError:
+    try:
+        from utilities.MusicSettingsManager import MusicSettingsManager
+    except ImportError:
+        from MusicSettingsManager import MusicSettingsManager
+
 class MusicPlayer:
-    def __init__(self, root):
+    def __init__(self, root, start_with_playlist=None):
         self.root = root
+        self.start_with_playlist = start_with_playlist
         self.root.title("SW Legion: Musikplayer")
         self.root.geometry("800x600")
         
@@ -24,6 +34,13 @@ class MusicPlayer:
         self.is_playing = False
         self.is_paused = False
         self.current_position = 0
+        
+        # Initialize playlists dictionary
+        self.playlists = {}
+        
+        # Settings Manager
+        self.music_settings = MusicSettingsManager()
+        self.settings = self.music_settings.load_settings()
         
         # Directories - finde das Projekt-Hauptverzeichnis oder EXE-Verzeichnis
         if getattr(sys, 'frozen', False):
@@ -58,6 +75,10 @@ class MusicPlayer:
         self.setup_ui()
         self.load_music_files()
         self.load_playlists()
+        
+        # Auto-start with specified playlist if requested
+        if self.start_with_playlist:
+            self.load_playlist(self.start_with_playlist, auto_start=True)
         
     def copy_initial_files(self):
         """Kopiert initiale Dateien aus _MEIPASS zu beschreibbaren Verzeichnissen"""
@@ -240,7 +261,21 @@ class MusicPlayer:
                  command=self.delete_playlist, bg="#f44336", fg="white").pack(fill="x", pady=2)
         
         # Set initial volume
-        self.set_volume(70)
+        saved_volume = self.settings.get('volume', 70)
+        self.volume_var.set(saved_volume)
+        self.set_volume(saved_volume)
+        
+        # Restore shuffle and repeat settings
+        self.shuffle_var.set(self.settings.get('shuffle', False))
+        self.repeat_var.set(self.settings.get('repeat', False))
+        
+        # Load last playlist if available
+        last_playlist = self.settings.get('current_playlist')
+        if last_playlist and last_playlist in self.playlists:
+            self.current_playlist = self.playlists[last_playlist].get('tracks', [])
+            self.current_track_index = self.settings.get('current_song_index', 0)
+            if self.current_track_index >= len(self.current_playlist):
+                self.current_track_index = 0
         
         # Start update timer only once
         if not hasattr(self, '_timer_started'):
@@ -341,8 +376,8 @@ class MusicPlayer:
         self.current_track_index = 0
         self.play_current_track()
         
-    def load_playlist(self, playlist_name):
-        """Lädt eine Playlist und startet die Wiedergabe"""
+    def load_playlist(self, playlist_name, auto_start=False):
+        """Lädt eine Playlist und startet optional die Wiedergabe"""
         if playlist_name in self.playlists:
             playlist_data = self.playlists[playlist_name]
             tracks = playlist_data.get('tracks', [])
@@ -356,12 +391,24 @@ class MusicPlayer:
             if valid_tracks:
                 self.current_playlist = valid_tracks
                 self.current_track_index = 0
-                self.play_current_track()
-                messagebox.showinfo("Playlist geladen", 
-                                   f"Playlist '{playlist_name}' geladen: {len(valid_tracks)} Tracks")
+                
+                # Save current playlist and song to settings
+                self.music_settings.update_setting('current_playlist', playlist_name)
+                self.music_settings.update_setting('current_song_index', 0)
+                
+                if auto_start:
+                    self.play_current_track()
+                
+                if not auto_start:  # Only show message box if not auto-started
+                    messagebox.showinfo("Playlist geladen", 
+                                       f"Playlist '{playlist_name}' geladen: {len(valid_tracks)} Tracks")
+                return True
             else:
-                messagebox.showwarning("Warnung", 
-                                      "Keine gültigen Tracks in der Playlist gefunden!")
+                if not auto_start:
+                    messagebox.showwarning("Warnung", 
+                                           "Keine gültigen Tracks in der Playlist gefunden!")
+                return False
+        return False
         
     def play_current_track(self):
         """Spielt den aktuellen Track ab"""
@@ -427,6 +474,8 @@ class MusicPlayer:
                     self.stop_music()
                     return
                     
+        # Save current song index to settings
+        self.music_settings.update_setting('current_song_index', self.current_track_index)
         self.play_current_track()
         
     def previous_track(self):
@@ -444,12 +493,16 @@ class MusicPlayer:
                 else:
                     self.current_track_index = 0
                     
+        # Save current song index to settings
+        self.music_settings.update_setting('current_song_index', self.current_track_index)
         self.play_current_track()
         
     def set_volume(self, value):
         """Setzt die Lautstärke"""
         volume = float(value) / 100
         pygame.mixer.music.set_volume(volume)
+        # Save volume to settings
+        self.music_settings.update_setting('volume', int(value))
         
     def update_progress(self):
         """Aktualisiert die Progress Bar"""
@@ -646,6 +699,21 @@ class MusicPlayer:
                         messagebox.showerror("Fehler", f"Fehler beim Löschen: {e}")
         else:
             messagebox.showwarning("Auswahl erforderlich", "Bitte wähle eine Playlist aus!")
+
+    @staticmethod
+    def launch_with_playlist(playlist_name):
+        """Startet den Musikplayer mit einer bestimmten Playlist"""
+        import threading
+        
+        def run_player():
+            root = tk.Tk()
+            app = MusicPlayer(root, start_with_playlist=playlist_name)
+            root.mainloop()
+            
+        # Run in separate thread to avoid blocking
+        thread = threading.Thread(target=run_player, daemon=True)
+        thread.start()
+        return thread
 
 if __name__ == "__main__":
     root = tk.Tk()

@@ -1,0 +1,8 @@
+{
+    "mission": "Test Mission",
+    "music": {
+        "enabled": true,
+        "playlist": "Test Playlist"
+    },
+    "scenario_text": "This is a test mission."
+}

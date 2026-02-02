@@ -27,10 +27,23 @@ except ImportError:
         from LegionUtils import get_writable_path
         logging.info("GameCompanion: Using absolute imports")
 
+# Try to import MusicPlayer
+try:
+    from .MusicPlayer import MusicPlayer
+except ImportError:
+    try:
+        from utilities.MusicPlayer import MusicPlayer
+    except ImportError:
+        try:
+            from MusicPlayer import MusicPlayer
+        except ImportError:
+            MusicPlayer = None
+            logging.warning("GameCompanion: Could not import MusicPlayer")
+
 from PIL import Image, ImageTk
 
 class GameCompanion:
-    def __init__(self, root):
+    def __init__(self, root, mission_file=None):
         self.db = LegionDatabase()
         self.rules = LegionRules
         self.root = root
@@ -86,6 +99,10 @@ class GameCompanion:
         self.ai_enabled = tk.BooleanVar(value=True)
 
         self.setup_ui()
+        
+        # Auto-load mission if provided
+        if mission_file:
+            self.root.after(500, lambda: self.load_mission_from_file(mission_file))
 
     def setup_ui(self):
         # Top Menü Leiste
@@ -799,8 +816,10 @@ class GameCompanion:
         initial_dir = get_writable_path("Missions")
 
         file_path = filedialog.askopenfilename(initialdir=initial_dir, title="Mission laden", filetypes=[("JSON", "*.json")])
-        if not file_path: return
+        if file_path:
+            self.load_mission_from_file(file_path)
 
+    def load_mission_from_file(self, file_path):
         try:
             logging.info(f"Loading mission from {file_path}")
             with open(file_path, 'r', encoding='utf-8') as f:
@@ -814,13 +833,48 @@ class GameCompanion:
             # Enable Scenario Button
             if self.mission_data.get("scenario_text"):
                 self.btn_show_scenario.config(state=tk.NORMAL)
+            
+            # Start Music if enabled
+            if self.mission_data.get("music", {}).get("enabled"):
+                self.start_mission_music()
 
             logging.info("Mission loaded successfully.")
-            messagebox.showinfo("Erfolg", "Mission geladen! Armee-Laden öffnet nun automatisch den richtigen Ordner.")
+            # Only show message if called interactively (not really easy to detect, but OK)
+            messagebox.showinfo("Erfolg", "Mission geladen!\nDie Musik startet (falls aktiviert).")
 
         except Exception as e:
-            logging.error(f"Failed to load mission: {e}")
-            messagebox.showerror("Fehler", f"Konnte Mission nicht laden: {e}")
+            logging.error(f"Error loading mission: {e}")
+            messagebox.showerror("Fehler", f"Fehler beim Laden der Mission: {e}")
+
+    def start_mission_music(self):
+        """Starts music based on mission settings"""
+        if not MusicPlayer:
+            logging.warning("MusicPlayer not available - Import failed")
+            return
+            
+        settings = self.mission_data.get("music", {})
+        playlist_name = settings.get("playlist")
+        enabled = settings.get("enabled", False)
+        
+        logging.info(f"Attempting to start music. Enabled: {enabled}, Playlist: {playlist_name}")
+        
+        if enabled and playlist_name:
+            try:
+                # Close existing music window if open
+                if hasattr(self, 'music_window') and self.music_window:
+                    try:
+                        self.music_window.destroy()
+                    except: pass
+
+                # Open as Toplevel window
+                self.music_window = tk.Toplevel(self.root)
+                self.music_app = MusicPlayer(self.music_window, start_with_playlist=playlist_name)
+                logging.info(f"Music player started with playlist: {playlist_name}")
+            except Exception as e:
+                logging.error(f"Error starting music: {e}")
+                messagebox.showerror("Musik Fehler", f"Konnte Musik nicht starten: {e}")
+        else:
+            logging.info("Music not enabled or no playlist selected in mission data")
 
     def show_scenario_popup(self):
         if not self.mission_data or not self.mission_data.get("scenario_text"):
@@ -1240,9 +1294,46 @@ class GameCompanion:
             msg = f"Gleichstand! {('Spieler' if roll == 'Player' else 'Gegner')} gewinnt den Wurf."
 
         # Show Result UI
+        # Tooltip cleanup
+        if getattr(self, 'tooltip_window', None):
+            self.tooltip_window.destroy()
+            self.tooltip_window = None
+            
         for widget in self.frame_center.winfo_children(): widget.destroy()
 
         tk.Label(self.frame_center, text=f"RUNDE {self.round_number}: Kommandokarten", font=("Segoe UI", 16, "bold")).pack(pady=10)
+        
+        # Grid Setup for Cards
+        cards_frame = tk.Frame(self.frame_center)
+        cards_frame.pack(fill="both", expand=True, padx=20)
+        
+        # --- Player Card ---
+        p_frame = tk.LabelFrame(cards_frame, text="Deine Karte", font=("Segoe UI", 12, "bold"), fg="blue")
+        p_frame.pack(side="left", fill="both", expand=True, padx=10)
+        
+        tk.Label(p_frame, text=p_card.get('name', 'Unbekannt'), font=("Segoe UI", 14, "bold")).pack(pady=5)
+        tk.Label(p_frame, text=f"{p_pips} Pips", font=("Segoe UI", 12)).pack()
+        tk.Label(p_frame, text=p_card.get('text', '-'), wraplength=300, justify="left").pack(pady=10, padx=5)
+        
+        # --- Opponent Card ---
+        o_frame = tk.LabelFrame(cards_frame, text="Gegner Karte", font=("Segoe UI", 12, "bold"), fg="red")
+        o_frame.pack(side="right", fill="both", expand=True, padx=10)
+        
+        tk.Label(o_frame, text=o_card.get('name', 'Standing Orders'), font=("Segoe UI", 14, "bold")).pack(pady=5)
+        tk.Label(o_frame, text=f"{o_pips} Pips", font=("Segoe UI", 12)).pack()
+        tk.Label(o_frame, text=o_card.get('text', '-'), wraplength=300, justify="left").pack(pady=10, padx=5)
+        
+        # --- Result ---
+        res_frame = tk.Frame(self.frame_center)
+        res_frame.pack(fill="x", pady=20)
+        
+        result_color = "green" if self.priority_player == "Player" else "red"
+        tk.Label(res_frame, text=msg, font=("Segoe UI", 18, "bold"), fg=result_color).pack()
+        
+        # --- Continue Button ---
+        tk.Button(self.frame_center, text="Weiter zu Befehlen", 
+                 bg="#4CAF50", fg="white", font=("Segoe UI", 14, "bold"),
+                 command=self.issue_orders_ui).pack(pady=20)
 
     def is_multi_target_card(self, command_card):
         """Prüft ob Command Card mehrere Ziele betreffen kann"""
@@ -1454,7 +1545,7 @@ class GameCompanion:
         tk.Button(result_window, text="OK", command=result_window.destroy).pack(pady=10)
         
         # Update UI
-        self.update_battle_display()
+        self.update_trees()
 
     def create_hover_tooltip(self, widget, text):
         """Erstellt ein Hover-Tooltip für ein Widget"""
@@ -3312,6 +3403,14 @@ class GameCompanion:
 
                 btn_apply = tk.Button(frame_result, text="ERGEBNIS ANWENDEN", bg="red", fg="white", command=apply_result)
                 btn_apply.pack(pady=5)
+            else:
+                def close_no_effect():
+                    # Consumes action even if missed
+                    top.destroy()
+                    on_complete()
+                
+                tk.Button(frame_result, text="Angriff beenden (Keine Wirkung)", 
+                          bg="gray", fg="white", command=close_no_effect).pack(pady=5)
 
         btn_roll = tk.Button(frame_result, text="⚂ WÜRFELN", bg="#4CAF50", fg="white", command=roll_attack, font=("Segoe UI", 12, "bold"))
         btn_roll.pack(pady=5)
@@ -3754,5 +3853,11 @@ if __name__ == "__main__":
 
 if __name__ == "__main__":
     root = tk.Tk()
-    app = GameCompanion(root)
+    
+    # Check for mission file argument
+    mission_file = None
+    if len(sys.argv) > 1:
+        mission_file = sys.argv[1]
+        
+    app = GameCompanion(root, mission_file=mission_file)
     root.mainloop()
