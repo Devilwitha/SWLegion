@@ -22,22 +22,31 @@ Von hier aus können alle drei Module gestartet werden.
 
 ## Die Module
 
-### 1. Armee Builder (`ArmeeBuilder.py`)
+### 1. Custom Unit Creator (`CustomUnitCreator.py`)
+Ein mächtiges Werkzeug, um eigene Einheiten zu entwerfen und in das Spiel zu integrieren.
+*   **Funktionen:**
+    *   Erstellen komplett eigener Einheiten mit individuellen Werten (HP, Mut, Geschwindigkeit, etc.).
+    *   Definition eigener Waffen mit Reichweite, Würfeln und Keywords.
+    *   Zuordnung der Einheit zu einer oder mehreren Fraktionen.
+    *   Die erstellten Einheiten stehen automatisch im **Armee Builder** zur Verfügung.
+
+### 2. Armee Builder (`ArmeeBuilder.py`)
 Ein Tool zum Erstellen und Speichern von Armeelisten.
 *   **Funktionen:**
     *   Wahl der Fraktion (Imperium, Rebellen, Republik, Separatisten, Schattenkollektiv).
+    *   Zugriff auf alle offiziellen Einheiten sowie **eigene Custom-Einheiten**.
     *   Hinzufügen von Einheiten und Ausrüstungskarten.
     *   Automatische Punkteberechnung.
     *   **Speichern/Laden:** Listen werden als `.json`-Dateien im Ordner `Armeen/` gespeichert.
 
-### 2. Mission Generator (`MissionBuilder.py`)
+### 3. Mission Generator (`MissionBuilder.py`)
 Ein Tool, um zufällige oder spezifische Missions-Prompts zu erstellen (z.B. für ChatGPT oder als Inspiration).
 *   **Funktionen:**
     *   Wahl der beteiligten Fraktionen.
     *   Wahl des Geländes (Wüste, Wald, Stadt, etc.).
     *   Generiert einen detaillierten Text mit Missionszielen und Sonderregeln.
 
-### 3. Spiel-Begleiter & AI Simulator (`GameCompanion.py`)
+### 4. Spiel-Begleiter & AI Simulator (`GameCompanion.py`)
 Das Herzstück für das aktive Spiel. Es ersetzt Marker und Würfel und bietet einen Solo-Modus.
 *   **Vorbereitung:**
     *   Lade deine Armeeliste (erstellt mit dem Armee Builder) über den blauen Button.
@@ -54,6 +63,7 @@ Das Herzstück für das aktive Spiel. Es ersetzt Marker und Würfel und bietet e
 
 ## Dateien
 *   `MainMenu.py`: Das Startmenü.
+*   `CustomUnitCreator.py`: Editor für eigene Einheiten.
 *   `ArmeeBuilder.py`: Editor für Listen.
 *   `MissionBuilder.py`: Generator für Missionen.
 *   `GameCompanion.py`: Das Spiel-Tool.

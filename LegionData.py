@@ -157,6 +157,42 @@ class LegionDatabase:
 
         self.load_catalog()
         self.load_legacy()
+        self.load_custom_units()
+
+    def load_custom_units(self):
+        """Loads custom units from custom_units.json."""
+        if not os.path.exists("custom_units.json"):
+            return
+
+        try:
+            logging.info("Loading custom units...")
+            with open("custom_units.json", "r", encoding="utf-8") as f:
+                custom_data = json.load(f)
+
+            for entry in custom_data:
+                unit_data = entry.get("unit_data")
+                factions = entry.get("factions", [])
+
+                if not unit_data: continue
+
+                # Mark as custom (optional, helps UI)
+                unit_data["is_custom"] = True
+
+                for faction in factions:
+                    if faction not in self.units:
+                        self.units[faction] = []
+
+                    # Check for duplicates by ID or Name to allow updates
+                    existing_idx = next((i for i, u in enumerate(self.units[faction]) if u.get("id") == unit_data.get("id")), -1)
+
+                    if existing_idx >= 0:
+                        self.units[faction][existing_idx] = unit_data
+                    else:
+                        self.units[faction].append(unit_data)
+
+        except Exception as e:
+            logging.error(f"Error loading custom units: {e}")
+            print(f"Error loading custom units: {e}")
 
     def translate(self, category, key, default=None):
         """Translates a key using the translation map."""
