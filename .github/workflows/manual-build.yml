@@ -40,20 +40,42 @@ jobs:
     - name: Install Inno Setup (if needed)
       if: ${{ github.event.inputs.build_type == 'installer' || github.event.inputs.build_type == 'both' }}
       run: |
-        Invoke-WebRequest -Uri "https://jrsoftware.org/download.php/is.exe" -OutFile "innosetup.exe"
-        Start-Process -FilePath "innosetup.exe" -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -Wait
-        echo "C:\Program Files (x86)\Inno Setup 6" >> $env:GITHUB_PATH
+        # Use chocolatey for more reliable installation
+        Set-ExecutionPolicy Bypass -Scope Process -Force
+        [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
+        iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+        
+        # Install Inno Setup via chocolatey
+        choco install innosetup -y --timeout=300
+        
+        # Add to PATH
+        $innoPath = "C:\Program Files (x86)\Inno Setup 6"
+        if (Test-Path $innoPath) {
+          echo $innoPath >> $env:GITHUB_PATH
+          Write-Host "Inno Setup installed successfully"
+        } else {
+          throw "Inno Setup installation failed"
+        }
+      timeout-minutes: 10
         
     - name: Build with PyInstaller
       working-directory: build/Win
       run: |
-        .\build.bat
+        $process = Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "build.bat" -PassThru -Wait -TimeoutSec 900
+        if ($process.ExitCode -ne 0) {
+          throw "Build script failed with exit code $($process.ExitCode)"
+        }
+      timeout-minutes: 15
         
     - name: Create installer
       if: ${{ github.event.inputs.build_type == 'installer' || github.event.inputs.build_type == 'both' }}
       working-directory: build/Win
       run: |
-        iscc "SWLegion_Setup.iss"
+        $process = Start-Process -FilePath "iscc.exe" -ArgumentList "SWLegion_Setup.iss" -PassThru -Wait -TimeoutSec 300
+        if ($process.ExitCode -ne 0) {
+          throw "Inno Setup compilation failed"
+        }
+      timeout-minutes: 8
         
     - name: Create portable package
       if: ${{ github.event.inputs.build_type == 'portable' || github.event.inputs.build_type == 'both' }}

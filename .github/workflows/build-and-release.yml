@@ -37,18 +37,33 @@ jobs:
         
     - name: Install Inno Setup
       run: |
-        # Download Inno Setup
-        Invoke-WebRequest -Uri "https://jrsoftware.org/download.php/is.exe" -OutFile "innosetup.exe"
-        # Install silently
-        Start-Process -FilePath "innosetup.exe" -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -Wait
+        # Use chocolatey for more reliable installation
+        Set-ExecutionPolicy Bypass -Scope Process -Force
+        [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
+        iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+        
+        # Install Inno Setup via chocolatey with timeout
+        choco install innosetup -y --timeout=300
+        
         # Add to PATH
-        echo "C:\Program Files (x86)\Inno Setup 6" >> $env:GITHUB_PATH
+        $innoPath = "C:\Program Files (x86)\Inno Setup 6"
+        if (Test-Path $innoPath) {
+          echo $innoPath >> $env:GITHUB_PATH
+          Write-Host "Inno Setup installed successfully"
+        } else {
+          throw "Inno Setup installation failed"
+        }
+      timeout-minutes: 10
         
     - name: Build with PyInstaller
       working-directory: build/Win
       run: |
-        # Execute the build script
-        .\build.bat
+        # Execute the build script with timeout
+        $process = Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "build.bat" -PassThru -Wait -TimeoutSec 900
+        if ($process.ExitCode -ne 0) {
+          throw "Build script failed with exit code $($process.ExitCode)"
+        }
+      timeout-minutes: 15
         
     - name: Verify build output
       working-directory: build/Win
@@ -62,14 +77,26 @@ jobs:
     - name: Create installer with Inno Setup
       working-directory: build/Win
       run: |
-        # Compile the installer
-        iscc "SWLegion_Setup.iss"
+        # Verify Inno Setup is available
+        $iscc = Get-Command "iscc.exe" -ErrorAction SilentlyContinue
+        if (-not $iscc) {
+          throw "iscc.exe not found in PATH"
+        }
+        Write-Host "Using Inno Setup: $($iscc.Source)"
+        
+        # Compile the installer with timeout
+        $process = Start-Process -FilePath "iscc.exe" -ArgumentList "SWLegion_Setup.iss" -PassThru -Wait -TimeoutSec 300
+        if ($process.ExitCode -ne 0) {
+          throw "Inno Setup compilation failed with exit code $($process.ExitCode)"
+        }
         
         # Verify installer was created
         if (!(Test-Path "InstallerSetup\SWLegion_Installer.exe")) {
-          throw "Installer creation failed"
+          throw "Installer creation failed - file not found"
         }
-        Write-Host "Installer created successfully"
+        $installer = Get-Item "InstallerSetup\SWLegion_Installer.exe"
+        Write-Host "Installer created successfully: $($installer.Length) bytes"
+      timeout-minutes: 8
         
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
