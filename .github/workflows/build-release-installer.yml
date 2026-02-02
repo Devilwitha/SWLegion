@@ -136,21 +136,37 @@ jobs:
         name: SWLegion-Installer-${{ github.sha }}
         path: ./release
         
+    - name: Download portable build
+      uses: actions/download-artifact@v4
+      with:
+        name: SWLegion-Portable-${{ github.sha }}
+        path: ./portable
+        
+    - name: Create portable ZIP
+      run: |
+        # Create ZIP file for portable version
+        Compress-Archive -Path "./portable/*" -DestinationPath "./release/SWLegion_Portable.zip" -Force
+        Write-Host "✅ Portable ZIP created: SWLegion_Portable.zip"
+        
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v1
       with:
         files: |
           ./release/SWLegion_Installer.exe
+          ./release/SWLegion_Portable.zip
         name: Star Wars Legion Tool Suite ${{ github.ref_name }}
         body: |
           ## 🚀 Star Wars Legion Tool Suite ${{ github.ref_name }}
           
-          ### 📦 Windows Installer
+          ### 📦 Download Options
           
-          **Download & Installation:**
-          1. **Download** `SWLegion_Installer.exe`
-          2. **Run installer** and follow setup wizard
-          3. **Launch** from Start Menu or Desktop shortcut
+          **🔧 Windows Installer (Recommended)**
+          - **Download:** `SWLegion_Installer.exe` (Auto-install with Start Menu integration)
+          - **Installation:** Run installer → Follow setup wizard → Launch from Start Menu
+          
+          **📁 Portable Version**
+          - **Download:** `SWLegion_Portable.zip` (No installation required)
+          - **Usage:** Extract ZIP → Run `SWLegion.exe` from extracted folder
           
           ### 🎮 Features:
           - 🎯 **Army Builder** with visual marker system (🎯💨📉⏸️)
@@ -173,10 +189,10 @@ jobs:
           - Automatic Start Menu and Desktop integration
           
           ### 🛡️ Installation Notes:
-          - The installer is **digitally signed** and **virus-scanned**
+          - **Installer:** Requires administrator rights, creates Start Menu shortcuts, includes uninstaller
+          - **Portable:** No installation needed, all files self-contained in folder
           - Windows Defender may show a warning - click "More info" → "Run anyway"
-          - Requires **administrator rights** for installation
-          - **Automatic updates** will be available in future releases
+          - Both versions include the complete database and all features
           
         draft: false
         prerelease: ${{ contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') }}
