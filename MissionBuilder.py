@@ -23,15 +23,14 @@ class LegionMissionGenerator:
         
         # Set window icon
         try:
-            self.root.iconbitmap("bilder/SW_legion_logo.png")
+            icon_img = Image.open("bilder/SW_legion_logo.png")
+            icon_img = icon_img.resize((32, 32), Image.Resampling.LANCZOS)
+            self.icon_photo = ImageTk.PhotoImage(icon_img)
+            self.root.iconphoto(True, self.icon_photo)
         except:
             pass
-        
-        # Set window icon
-        try:
-            self.root.iconbitmap("bilder/SW_legion_logo.png")
-        except:
-            pass
+
+        self.db = LegionDatabase()
 
         self.db = LegionDatabase()
         self.api_key = self.load_api_key()
@@ -111,6 +110,14 @@ class LegionMissionGenerator:
         self.entry_punkte = tk.Entry(frame_settings, font=("Arial", 10))
         self.entry_punkte.insert(0, "800")
         self.entry_punkte.pack(fill="x", pady=5)
+        
+        # 3b. RUNDEN
+        lbl_runden = tk.Label(frame_settings, text="Anzahl Runden:", font=("Arial", 11, "bold"))
+        lbl_runden.pack(anchor="w", pady=(10, 5))
+        
+        self.entry_runden = tk.Entry(frame_settings, font=("Arial", 10))
+        self.entry_runden.insert(0, "6")
+        self.entry_runden.pack(fill="x", pady=5)
 
         # 4. BUTTON
         btn_gen = tk.Button(
@@ -325,6 +332,7 @@ class LegionMissionGenerator:
             "blue_faction": self.combo_blue.get(),
             "red_faction": self.combo_red.get(),
             "points": self.entry_punkte.get(),
+            "rounds": int(self.entry_runden.get()) if self.entry_runden.get().isdigit() else 6,
             "terrain": [k for k,v in self.var_gelaende.items() if v.get()],
             "prompt_text": self.txt_output.get("1.0", tk.END),
             "scenario_text": self.current_scenario_text
