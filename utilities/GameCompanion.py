@@ -2507,21 +2507,16 @@ class GameCompanion:
                     instructions.append("3. NAHKAMPF: Bei Kontakt (alle Bodeneinheiten)")
                 instructions.append("4. ZIELEN oder AUSRÜSTUNG: Falls kein Angriff möglich")
                 
-                # Automatische Bewegung zur nächsten Einheit
-                if closest_enemy:
-                    self.auto_move_to_target(closest_enemy)
+                # Automatische Bewegung zur nächsten Einheit entfernt
                     
             elif is_melee or can_melee:
-                # Nahkampf bevorzugen - entferne self.enemy_in_melee_range() Aufruf
                 # Nahkampf bevorzugen
                 instructions.append("⚔️ NAHKAMPF STRATEGIE:")
                 instructions.append("1. NAHKAMPF-ANGRIFF: Hoher Schaden, kann nicht geblockt werden")
                 instructions.append("2. Alle Bodeneinheiten können Nahkampf ausführen")
                 instructions.append("3. ZIELEN: Falls Angriff nicht optimal")
-                
-                # Automatischer Nahkampf-Versuch
-                if self.enemy_in_melee_range():
-                    self.auto_attempt_melee()
+
+                # Automatischer Nahkampf-Versuch entfernt (existiert nicht)
                     
             elif has_ranged:
                 # Fernkampf mit intelligenter Zielwahl
@@ -2530,9 +2525,6 @@ class GameCompanion:
                 instructions.append(f"2. ANGRIFF: Fernwaffen (Reichweite {max_range})")
                 instructions.append("3. AUSRÜSTUNG: Nutze verfügbare Items")
                 
-                # Automatisches Zielen und Angreifen
-                self.auto_aim_and_attack()
-                
             else:
                 # Support und Ausrüstung
                 instructions.append("🔧 SUPPORT STRATEGIE:")
@@ -2540,24 +2532,60 @@ class GameCompanion:
                 instructions.append("2. BEWEGUNG: Position für Support")
                 instructions.append("3. AUSWEICHEN oder BEREITSCHAFT")
 
-        # Show instructions für physisches Spiel
-        instruction_text = f"🤖 KI-Aktivierung: {unit_name}\\n\\n" + "\\n".join(instructions)
-        instruction_text += "\\n\\n📋 Führe diese Aktionen auf dem physischen Spieltisch aus."
-        instruction_text += "\\n🎲 Verwende die Aktions-Buttons um Ergebnisse einzutragen."
+        # Create interactive Dialog instead of just blocking info
         
-        messagebox.showinfo("AI Zug", instruction_text)
+        # Determine likely intent
+        intent = "Support"
+        if is_melee or can_melee: intent = "Melee"
+        if has_ranged and enemy_in_range: intent = "Ranged"
+        if not enemy_in_range: intent = "Move"
+        
+        # Dialog
+        top = tk.Toplevel(self.root)
+        top.title(f"AI Zug: {unit_name}")
+        top.geometry("500x500")
+        top.transient(self.root)
+        top.grab_set()
 
-        # Legacy AI logic for compatibility  
-        if not self.is_panicked and is_melee and max_range < 2:
-            # Melee Attack Query
-            self.ai_query_targets(self.active_unit, is_melee=True)
-        elif not self.is_panicked and max_range >= 2:
-            # Ranged Attack Query
-            self.ai_query_targets(self.active_unit, is_melee=False)
-        else:
-            # No attack possible - show options
-            msg = f"Einheit: {unit_name}\\n\\n" + "\\n".join(instructions) + "\\n\\nBitte führe diese Aktionen auf dem Tisch aus."
-            messagebox.showinfo("AI Zug Anweisung", msg)
+        tk.Label(top, text=f"AI PLANUNG: {unit_name}", font=("Segoe UI", 16, "bold"), fg="#2196F3").pack(pady=10)
+        
+        # Scrollable Instructions
+        f_text = tk.Frame(top, relief="groove", borderwidth=2)
+        f_text.pack(fill="both", expand=True, padx=20, pady=5)
+        
+        instr_str = "\n".join(instructions)
+        lbl_instr = tk.Label(f_text, text=instr_str, justify="left", wraplength=450, bg="white", padx=10, pady=10)
+        lbl_instr.pack(fill="both", expand=True)
+
+        tk.Label(top, text="Wie soll die AI fortfahren?", font=("bold")).pack(pady=10)
+        
+        def do_attack_check():
+            top.destroy()
+            # Launch attack helper
+            self.ai_query_targets(self.active_unit, is_melee=(intent=="Melee"))
+
+        def do_move():
+            top.destroy()
+            self.perform_action("Move")
+
+        def do_manual():
+            top.destroy()
+            # Just close, user relies on main buttons
+
+        f_btns = tk.Frame(top)
+        f_btns.pack(pady=20)
+        
+        # Dynamic Buttons based on intent
+        if intent == "Move":
+            tk.Button(f_btns, text="Bewegungs-Dialog öffnen", command=do_move, bg="#4CAF50", fg="white", width=25).pack(pady=5)
+        
+        if intent in ["Melee", "Ranged"]:
+            tk.Button(f_btns, text="Ziele prüfen & Angreifen", command=do_attack_check, bg="#F44336", fg="white", width=25).pack(pady=5)
+            
+        tk.Button(f_btns, text="Manuell entscheiden", command=do_manual, bg="#9E9E9E", fg="white", width=25).pack(pady=5)
+        
+        # Don't execute legacy code
+        return
 
     def find_closest_enemy(self):
         """Findet den nächsten Feind für AI-Bewegung (vereinfacht)"""

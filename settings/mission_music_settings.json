@@ -1,6 +1,6 @@
 {
-  "enabled": true,
-  "last_playlist": "1",
+  "enabled": false,
+  "last_playlist": "",
   "volume": 70,
   "current_song": null
 }
