@@ -1,5 +1,9 @@
 # Star Wars Legion: All-in-One Tool Suite
 
+![Build Status](https://github.com/Devilwitha/SWLegion/actions/workflows/build-and-release.yml/badge.svg)
+![Latest Release](https://img.shields.io/github/v/release/Devilwitha/SWLegion)
+![Downloads](https://img.shields.io/github/downloads/Devilwitha/SWLegion/total)
+
 Dieses Projekt bietet eine Sammlung von digitalen Werkzeugen für das Tabletop-Spiel **Star Wars: Legion**. Es unterstützt Spieler beim Erstellen von Armeen, Generieren von Missionen und dient als digitaler Begleiter während des Spiels (inklusive AI-Gegner-Modus).
 
 ## 📋 Projektinformationen
@@ -9,7 +13,19 @@ Dieses Projekt bietet eine Sammlung von digitalen Werkzeugen für das Tabletop-S
 **Regelwerk:** 2.5v  
 **Github:** https://github.com/Devilwitha/SWLegion
 
-## 🚀 Schnellstart
+## 🔽 Download & Installation
+
+### Windows Installer (Empfohlen)
+1. Lade die neueste Version von den [Releases](https://github.com/Devilwitha/SWLegion/releases) herunter
+2. Führe `SWLegion_Installer.exe` aus und folge dem Setup-Assistenten
+3. Starte das Programm über das Startmenü oder die Desktop-Verknüpfung
+
+### Portable Version
+1. Lade `SWLegion_Portable.zip` von den [Releases](https://github.com/Devilwitha/SWLegion/releases) herunter
+2. Entpacke das ZIP-Archiv an einen beliebigen Ort
+3. Führe `Start_SWLegion.bat` aus
+
+## 🚀 Schnellstart (Development)
 
 ### Voraussetzungen
 *   Python 3.8+ muss installiert sein
