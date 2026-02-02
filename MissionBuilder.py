@@ -6,6 +6,8 @@ import os
 import sys
 import subprocess
 from LegionData import LegionDatabase
+from PIL import Image, ImageTk
+from PIL import Image, ImageTk
 
 try:
     import requests
@@ -18,6 +20,18 @@ class LegionMissionGenerator:
         self.root = root
         self.root.title("SW Legion: Mission & Map Generator")
         self.root.geometry("1400x900")
+        
+        # Set window icon
+        try:
+            self.root.iconbitmap("bilder/SW_legion_logo.png")
+        except:
+            pass
+        
+        # Set window icon
+        try:
+            self.root.iconbitmap("bilder/SW_legion_logo.png")
+        except:
+            pass
 
         self.db = LegionDatabase()
         self.api_key = self.load_api_key()
@@ -112,6 +126,9 @@ class LegionMissionGenerator:
         lbl_output.pack(anchor="w")
 
         self.txt_output = tk.Text(frame_settings, height=8, font=("Consolas", 8), wrap="word")
+        # Configure formatting tags
+        self.txt_output.tag_configure("bold", font=("Consolas", 8, "bold"))
+        self.txt_output.tag_configure("italic", font=("Consolas", 8, "italic"))
         self.txt_output.pack(fill="both", expand=True)
 
         # --- RECHTS: MAP VISUALISIERUNG ---
@@ -252,6 +269,54 @@ class LegionMissionGenerator:
             pass
         return ""
 
+    def insert_formatted_text(self, text_widget, content):
+        """Simple formatting: Bold titles and bullet points"""
+        text_widget.delete("1.0", tk.END)
+        
+        lines = content.split('\n')
+        for line in lines:
+            line = line.strip()
+            
+            # Skip empty lines
+            if not line:
+                text_widget.insert(tk.END, '\n')
+                continue
+            
+            # Check if it's a title (ends with : or contains **text**)
+            is_title = False
+            if line.endswith(':') or '**' in line:
+                is_title = True
+            
+            # Remove ** markers if present
+            clean_line = line.replace('**', '')
+            
+            # Check if it's a bullet point (starts with * or numbered)
+            is_bullet = line.startswith('*') or line.startswith('-') or (len(line) > 2 and line[0].isdigit() and line[1] == '.')
+            
+            # Format the line
+            if is_title:
+                # Insert as bold title
+                start_pos = text_widget.index(tk.END)
+                text_widget.insert(tk.END, clean_line)
+                end_pos = text_widget.index(tk.END)
+                text_widget.tag_add("bold", start_pos, end_pos)
+            elif is_bullet:
+                # Convert to bullet point with -
+                if line.startswith('*'):
+                    bullet_text = '- ' + line[1:].strip()
+                elif line.startswith('-'):
+                    bullet_text = line
+                elif line[0].isdigit() and line[1] == '.':
+                    bullet_text = '- ' + line[2:].strip()
+                else:
+                    bullet_text = '- ' + line
+                text_widget.insert(tk.END, bullet_text)
+            else:
+                # Regular text
+                text_widget.insert(tk.END, clean_line)
+            
+            text_widget.insert(tk.END, '\n')
+
     def save_mission(self):
         # Gather data
         data = {
@@ -332,145 +397,149 @@ class LegionMissionGenerator:
                 self.canvas.create_text(w/2, h/2, text=f"Fehler beim Laden der Karte:\n{e}", fill="red")
 
             # Skip standard logic
-        elif mode == "Battle Lines":
-            # Long edges, Range 1 deep.
-            # Top edge (Red): 0 to Range 1 (0.5ft) height
-            range_1_px = ft_to_px_h(0.5)
+        else:
+            # Use standard deployment logic
+            mode = self.current_deployment
+            
+            if mode == "Battle Lines":
+                # Long edges, Range 1 deep.
+                # Top edge (Red): 0 to Range 1 (0.5ft) height
+                range_1_px = ft_to_px_h(0.5)
 
-            # Red Zone (Top)
-            self.canvas.create_rectangle(0, 0, w, range_1_px, fill="#ffcdd2", outline="red")
-            self.canvas.create_text(w/2, range_1_px/2, text="ROT ZONE", fill="red", font=("bold"))
+                # Red Zone (Top)
+                self.canvas.create_rectangle(0, 0, w, range_1_px, fill="#ffcdd2", outline="red")
+                self.canvas.create_text(w/2, range_1_px/2, text="ROT ZONE", fill="red", font=("bold"))
 
-            # Blue Zone (Bottom)
-            self.canvas.create_rectangle(0, h-range_1_px, w, h, fill="#bbdefb", outline="blue")
-            self.canvas.create_text(w/2, h-(range_1_px/2), text="BLAU ZONE", fill="blue", font=("bold"))
+                # Blue Zone (Bottom)
+                self.canvas.create_rectangle(0, h-range_1_px, w, h, fill="#bbdefb", outline="blue")
+                self.canvas.create_text(w/2, h-(range_1_px/2), text="BLAU ZONE", fill="blue", font=("bold"))
 
-        elif mode == "The Long March":
-            # Short edges, Range 1 deep.
-            # Left (Blue?), Right (Red?)
-            range_1_px = ft_to_px_w(0.5)
+            elif mode == "The Long March":
+                # Short edges, Range 1 deep.
+                # Left (Blue?), Right (Red?)
+                range_1_px = ft_to_px_w(0.5)
 
-            # Blue (Left)
-            self.canvas.create_rectangle(0, 0, range_1_px, h, fill="#bbdefb", outline="blue")
-            self.canvas.create_text(range_1_px/2, h/2, text="BLAU", fill="blue", font=("bold"), angle=90)
+                # Blue (Left)
+                self.canvas.create_rectangle(0, 0, range_1_px, h, fill="#bbdefb", outline="blue")
+                self.canvas.create_text(range_1_px/2, h/2, text="BLAU", fill="blue", font=("bold"), angle=90)
 
-            # Red (Right)
-            self.canvas.create_rectangle(w-range_1_px, 0, w, h, fill="#ffcdd2", outline="red")
-            self.canvas.create_text(w-(range_1_px/2), h/2, text="ROT", fill="red", font=("bold"), angle=270)
+                # Red (Right)
+                self.canvas.create_rectangle(w-range_1_px, 0, w, h, fill="#ffcdd2", outline="red")
+                self.canvas.create_text(w-(range_1_px/2), h/2, text="ROT", fill="red", font=("bold"), angle=270)
 
-        elif mode == "Major Offensive":
-            # Corners.
-            # Setup zones are L-shaped or triangles?
-            # In Legion, Major Offensive is opposite corners.
-            # Blue: Bottom Left. Red: Top Right.
-            # Size: 4x2 area? No, typically Range 2 from corner.
-            # Let's approx corner boxes.
+            elif mode == "Major Offensive":
+                # Corners.
+                # Setup zones are L-shaped or triangles?
+                # In Legion, Major Offensive is opposite corners.
+                # Blue: Bottom Left. Red: Top Right.
+                # Size: 4x2 area? No, typically Range 2 from corner.
+                # Let's approx corner boxes.
 
-            corner_w = ft_to_px_w(2.0) # Approx
-            corner_h = ft_to_px_h(1.0)
+                corner_w = ft_to_px_w(2.0) # Approx
+                corner_h = ft_to_px_h(1.0)
 
-            # Blue (Bottom Left)
-            self.canvas.create_rectangle(0, h-corner_h, corner_w, h, fill="#bbdefb", outline="blue")
-            self.canvas.create_text(corner_w/3, h-corner_h/2, text="BLAU", fill="blue")
+                # Blue (Bottom Left)
+                self.canvas.create_rectangle(0, h-corner_h, corner_w, h, fill="#bbdefb", outline="blue")
+                self.canvas.create_text(corner_w/3, h-corner_h/2, text="BLAU", fill="blue")
 
-            # Red (Top Right)
-            self.canvas.create_rectangle(w-corner_w, 0, w, corner_h, fill="#ffcdd2", outline="red")
-            self.canvas.create_text(w-corner_w/3, corner_h/2, text="ROT", fill="red")
+                # Red (Top Right)
+                self.canvas.create_rectangle(w-corner_w, 0, w, corner_h, fill="#ffcdd2", outline="red")
+                self.canvas.create_text(w-corner_w/3, corner_h/2, text="ROT", fill="red")
 
-        elif mode == "Disarray":
-            # Corners, but split.
-            # Blue: Top Left & Bottom Right.
-            # Red: Top Right & Bottom Left.
+            elif mode == "Disarray":
+                # Corners, but split.
+                # Blue: Top Left & Bottom Right.
+                # Red: Top Right & Bottom Left.
 
-            corner_w = ft_to_px_w(1.5)
-            corner_h = ft_to_px_h(0.75)
+                corner_w = ft_to_px_w(1.5)
+                corner_h = ft_to_px_h(0.75)
 
-            # Blue
-            self.canvas.create_rectangle(0, 0, corner_w, corner_h, fill="#bbdefb", outline="blue")
-            self.canvas.create_rectangle(w-corner_w, h-corner_h, w, h, fill="#bbdefb", outline="blue")
+                # Blue
+                self.canvas.create_rectangle(0, 0, corner_w, corner_h, fill="#bbdefb", outline="blue")
+                self.canvas.create_rectangle(w-corner_w, h-corner_h, w, h, fill="#bbdefb", outline="blue")
 
-            # Red
-            self.canvas.create_rectangle(w-corner_w, 0, w, corner_h, fill="#ffcdd2", outline="red")
-            self.canvas.create_rectangle(0, h-corner_h, corner_w, h, fill="#ffcdd2", outline="red")
+                # Red
+                self.canvas.create_rectangle(w-corner_w, 0, w, corner_h, fill="#ffcdd2", outline="red")
+                self.canvas.create_rectangle(0, h-corner_h, corner_w, h, fill="#ffcdd2", outline="red")
 
-        elif mode == "Danger Close":
-            # Center split? Or close lines?
-            # Battle Lines but Range 2?
-            # Let's assuming thicker strips.
-            range_2_px = ft_to_px_h(1.0)
+            elif mode == "Danger Close":
+                # Center split? Or close lines?
+                # Battle Lines but Range 2?
+                # Let's assuming thicker strips.
+                range_2_px = ft_to_px_h(1.0)
 
-            self.canvas.create_rectangle(0, 0, w, range_2_px, fill="#ffcdd2", outline="red")
-            self.canvas.create_rectangle(0, h-range_2_px, w, h, fill="#bbdefb", outline="blue")
+                self.canvas.create_rectangle(0, 0, w, range_2_px, fill="#ffcdd2", outline="red")
+                self.canvas.create_rectangle(0, h-range_2_px, w, h, fill="#bbdefb", outline="blue")
 
-        elif mode == "Hemmed In":
-            # Center circle vs Edges?
-            # Blue (Defender) center, Red (Attacker) edges?
-            # Approx circle in middle
+            elif mode == "Hemmed In":
+                # Center circle vs Edges?
+                # Blue (Defender) center, Red (Attacker) edges?
+                # Approx circle in middle
 
-            # Center (Blue)
-            cx, cy = w/2, h/2
-            r = ft_to_px_h(0.75)
-            self.canvas.create_oval(cx-r, cy-r, cx+r, cy+r, fill="#bbdefb", outline="blue")
-            self.canvas.create_text(cx, cy, text="BLAU", fill="blue")
+                # Center (Blue)
+                cx, cy = w/2, h/2
+                r = ft_to_px_h(0.75)
+                self.canvas.create_oval(cx-r, cy-r, cx+r, cy+r, fill="#bbdefb", outline="blue")
+                self.canvas.create_text(cx, cy, text="BLAU", fill="blue")
 
-            # Edges (Red)
-            # Surrounding? Or two sides?
-            # Let's draw strips on Left/Right
-            strip = ft_to_px_w(0.5)
-            self.canvas.create_rectangle(0, 0, strip, h, fill="#ffcdd2", outline="red")
-            self.canvas.create_rectangle(w-strip, 0, w, h, fill="#ffcdd2", outline="red")
+                # Edges (Red)
+                # Surrounding? Or two sides?
+                # Let's draw strips on Left/Right
+                strip = ft_to_px_w(0.5)
+                self.canvas.create_rectangle(0, 0, strip, h, fill="#ffcdd2", outline="red")
+                self.canvas.create_rectangle(w-strip, 0, w, h, fill="#ffcdd2", outline="red")
 
-        elif "Hinterhalt" in mode or "Ambush" in mode:
-            # Defender Center (Blue), Attacker Surround (Red)
-            # Center Box Range 1 away from edges?
-            # Or Center Box Size?
-            # Standard: Defender setup within Range 2 of center token?
-            # Let's do: Center Box (Blue), Everything else (Red)? Or Edges?
-            # Assume: Defender has a central zone. Attacker starts at edges.
+            elif "Hinterhalt" in mode or "Ambush" in mode:
+                # Defender Center (Blue), Attacker Surround (Red)
+                # Center Box Range 1 away from edges?
+                # Or Center Box Size?
+                # Standard: Defender setup within Range 2 of center token?
+                # Let's do: Center Box (Blue), Everything else (Red)? Or Edges?
+                # Assume: Defender has a central zone. Attacker starts at edges.
 
-            # Blue Center
-            center_w = ft_to_px_w(2.0)
-            center_h = ft_to_px_h(1.0)
-            cx, cy = w/2, h/2
+                # Blue Center
+                center_w = ft_to_px_w(2.0)
+                center_h = ft_to_px_h(1.0)
+                cx, cy = w/2, h/2
 
-            self.canvas.create_rectangle(cx - center_w/2, cy - center_h/2, cx + center_w/2, cy + center_h/2, fill="#bbdefb", outline="blue")
-            self.canvas.create_text(cx, cy, text="BLAU (Verteidiger)", fill="blue")
+                self.canvas.create_rectangle(cx - center_w/2, cy - center_h/2, cx + center_w/2, cy + center_h/2, fill="#bbdefb", outline="blue")
+                self.canvas.create_text(cx, cy, text="BLAU (Verteidiger)", fill="blue")
 
-            # Red Edges (Strip)
-            strip = ft_to_px_h(0.5)
-            self.canvas.create_rectangle(0, 0, w, strip, fill="#ffcdd2", outline="red") # Top
-            self.canvas.create_rectangle(0, h-strip, w, h, fill="#ffcdd2", outline="red") # Bottom
-            self.canvas.create_rectangle(0, 0, strip, h, fill="#ffcdd2", outline="red") # Left
-            self.canvas.create_rectangle(w-strip, 0, w, h, fill="#ffcdd2", outline="red") # Right
+                # Red Edges (Strip)
+                strip = ft_to_px_h(0.5)
+                self.canvas.create_rectangle(0, 0, w, strip, fill="#ffcdd2", outline="red") # Top
+                self.canvas.create_rectangle(0, h-strip, w, h, fill="#ffcdd2", outline="red") # Bottom
+                self.canvas.create_rectangle(0, 0, strip, h, fill="#ffcdd2", outline="red") # Left
+                self.canvas.create_rectangle(w-strip, 0, w, h, fill="#ffcdd2", outline="red") # Right
 
-        elif "Einkesselung" in mode or "Encirclement" in mode:
-            # Similar to Long March but Defender is pinched?
-            # Blue Center Strip. Red Left AND Right.
+            elif "Einkesselung" in mode or "Encirclement" in mode:
+                # Similar to Long March but Defender is pinched?
+                # Blue Center Strip. Red Left AND Right.
 
-            # Blue Center Strip
-            strip_w = ft_to_px_w(2.0)
-            cx = w/2
-            self.canvas.create_rectangle(cx - strip_w/2, 0, cx + strip_w/2, h, fill="#bbdefb", outline="blue")
-            self.canvas.create_text(cx, h/2, text="BLAU", fill="blue")
+                # Blue Center Strip
+                strip_w = ft_to_px_w(2.0)
+                cx = w/2
+                self.canvas.create_rectangle(cx - strip_w/2, 0, cx + strip_w/2, h, fill="#bbdefb", outline="blue")
+                self.canvas.create_text(cx, h/2, text="BLAU", fill="blue")
 
-            # Red Sides
-            side_w = ft_to_px_w(1.0)
-            self.canvas.create_rectangle(0, 0, side_w, h, fill="#ffcdd2", outline="red")
-            self.canvas.create_rectangle(w-side_w, 0, w, h, fill="#ffcdd2", outline="red")
+                # Red Sides
+                side_w = ft_to_px_w(1.0)
+                self.canvas.create_rectangle(0, 0, side_w, h, fill="#ffcdd2", outline="red")
+                self.canvas.create_rectangle(w-side_w, 0, w, h, fill="#ffcdd2", outline="red")
 
-        elif "Nahkampf" in mode or "Close Quarters" in mode:
-            # Very close battle lines. Range 1 apart?
-            # Middle of board.
-            mid_h = h/2
-            zone_h = ft_to_px_h(1.0)
+            elif "Nahkampf" in mode or "Close Quarters" in mode:
+                # Very close battle lines. Range 1 apart?
+                # Middle of board.
+                mid_h = h/2
+                zone_h = ft_to_px_h(1.0)
 
-            # Red Top (Ends at mid - 0.5)
-            self.canvas.create_rectangle(0, 0, w, mid_h - (zone_h/2), fill="#ffcdd2", outline="red")
+                # Red Top (Ends at mid - 0.5)
+                self.canvas.create_rectangle(0, 0, w, mid_h - (zone_h/2), fill="#ffcdd2", outline="red")
 
-            # Blue Bottom (Starts at mid + 0.5)
-            self.canvas.create_rectangle(0, mid_h + (zone_h/2), w, h, fill="#bbdefb", outline="blue")
+                # Blue Bottom (Starts at mid + 0.5)
+                self.canvas.create_rectangle(0, mid_h + (zone_h/2), w, h, fill="#bbdefb", outline="blue")
 
-            self.canvas.create_text(w/2, h/2, text="--- ENGAGEMENT ---", fill="#333")
+                self.canvas.create_text(w/2, h/2, text="--- ENGAGEMENT ---", fill="#333")
 
         # Labels for Armies (Factions)
         blue_fac = self.combo_blue.get()
@@ -611,7 +680,7 @@ class LegionMissionGenerator:
                     text_content = result['candidates'][0]['content']['parts'][0]['text']
                     self.current_scenario_text = text_content
                     self.txt_output.delete("1.0", tk.END)
-                    self.txt_output.insert(tk.END, text_content)
+                    self.insert_formatted_text(self.txt_output, text_content)
                 except KeyError:
                     self.txt_output.insert(tk.END, f"\nFehler beim Parsen der Antwort: {result}")
             else:

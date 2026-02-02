@@ -4,6 +4,7 @@ import os
 import sys
 import subprocess
 import logging
+from PIL import Image, ImageTk
 import LegionUtils
 
 class MainMenu:
@@ -11,9 +12,26 @@ class MainMenu:
         LegionUtils.setup_logging()
         self.root = root
         self.root.title("Star Wars Legion: All-in-One Tool")
-        self.root.geometry("400x500")
-
-        tk.Label(self.root, text="Star Wars Legion Zentrale", font=("Segoe UI", 16, "bold")).pack(pady=20)
+        self.root.geometry("400x600")
+        
+        # Set window icon
+        try:
+            icon_img = Image.open("bilder/SW_legion_logo.png")
+            icon_img = icon_img.resize((32, 32), Image.Resampling.LANCZOS)
+            self.icon_photo = ImageTk.PhotoImage(icon_img)
+            self.root.iconphoto(True, self.icon_photo)
+        except:
+            pass  # Fallback if icon loading fails
+        
+        # Load and display logo
+        try:
+            logo_img = Image.open("bilder/SW_legion_logo.png")
+            logo_img = logo_img.resize((300, 150), Image.Resampling.LANCZOS)
+            self.logo_photo = ImageTk.PhotoImage(logo_img)
+            tk.Label(self.root, image=self.logo_photo).pack(pady=20)
+        except Exception as e:
+            # Fallback text if image loading fails
+            tk.Label(self.root, text="Star Wars Legion Zentrale", font=("Segoe UI", 16, "bold")).pack(pady=20)
 
         btn_factory = tk.Button(self.root, text="Custom Factory", command=self.run_custom_factory, width=30, height=2, bg="#9C27B0", fg="white", font=("Segoe UI", 10, "bold"))
         btn_factory.pack(pady=10)

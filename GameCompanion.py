@@ -6,6 +6,8 @@ import os
 import logging
 from LegionData import LegionDatabase
 from LegionRules import LegionRules
+from PIL import Image, ImageTk
+from PIL import Image, ImageTk
 
 class GameCompanion:
     def __init__(self, root):
@@ -16,6 +18,18 @@ class GameCompanion:
         logging.info("GameCompanion initialized.")
         self.root.title("SW Legion: Game Companion & AI Simulator (v2.0 Rules)")
         self.root.geometry("1400x900")
+        
+        # Set window icon
+        try:
+            self.root.iconbitmap("bilder/SW_legion_logo.png")
+        except:
+            pass
+        
+        # Set window icon
+        try:
+            self.root.iconbitmap("bilder/SW_legion_logo.png")
+        except:
+            pass
 
         # Game State
         self.player_army = {"faction": "", "units": []}
@@ -238,8 +252,64 @@ class GameCompanion:
 
         txt = tk.Text(top, wrap="word", font=("Segoe UI", 11), padx=10, pady=10)
         txt.pack(fill="both", expand=True)
-        txt.insert("1.0", self.mission_data.get("scenario_text", ""))
+        
+        # Configure bold formatting tag
+        txt.tag_configure("bold", font=("Segoe UI", 11, "bold"))
+        txt.tag_configure("italic", font=("Segoe UI", 11, "italic"))
+        
+        # Parse and insert formatted text
+        scenario_text = self.mission_data.get("scenario_text", "")
+        self.insert_formatted_text(txt, scenario_text)
+        
         txt.config(state=tk.DISABLED)
+
+    def insert_formatted_text(self, text_widget, content):
+        """Simple formatting: Bold titles and bullet points"""
+        text_widget.delete("1.0", tk.END)
+        
+        lines = content.split('\n')
+        for line in lines:
+            line = line.strip()
+            
+            # Skip empty lines
+            if not line:
+                text_widget.insert(tk.END, '\n')
+                continue
+            
+            # Check if it's a title (ends with : or contains **text**)
+            is_title = False
+            if line.endswith(':') or '**' in line:
+                is_title = True
+            
+            # Remove ** markers if present
+            clean_line = line.replace('**', '')
+            
+            # Check if it's a bullet point (starts with * or numbered)
+            is_bullet = line.startswith('*') or line.startswith('-') or (len(line) > 2 and line[0].isdigit() and line[1] == '.')
+            
+            # Format the line
+            if is_title:
+                # Insert as bold title
+                start_pos = text_widget.index(tk.END)
+                text_widget.insert(tk.END, clean_line)
+                end_pos = text_widget.index(tk.END)
+                text_widget.tag_add("bold", start_pos, end_pos)
+            elif is_bullet:
+                # Convert to bullet point with -
+                if line.startswith('*'):
+                    bullet_text = '- ' + line[1:].strip()
+                elif line.startswith('-'):
+                    bullet_text = line
+                elif line[0].isdigit() and line[1] == '.':
+                    bullet_text = '- ' + line[2:].strip()
+                else:
+                    bullet_text = '- ' + line
+                text_widget.insert(tk.END, bullet_text)
+            else:
+                # Regular text
+                text_widget.insert(tk.END, clean_line)
+            
+            text_widget.insert(tk.END, '\n')
 
     def start_setup_phase(self):
         self.current_phase = "Setup"
@@ -842,19 +912,25 @@ class GameCompanion:
         f_acts = tk.Frame(self.frame_center)
         f_acts.pack(pady=10)
 
-        if self.active_side == "Player" and not self.is_panicked and self.actions_remaining > 0:
+        if (self.active_side == "Player" or (self.active_side == "Opponent" and self.ai_enabled.get())) and not self.is_panicked and self.actions_remaining > 0:
             btn_cfg = {"font": ("Segoe UI", 10), "width": 15, "bg": "#2196F3", "fg": "white"}
 
-            tk.Button(f_acts, text="Bewegung", command=lambda: self.perform_action("Move"), **btn_cfg).grid(row=0, column=0, padx=5, pady=5)
-            tk.Button(f_acts, text="Angriff", command=lambda: self.perform_action("Attack"), **btn_cfg).grid(row=0, column=1, padx=5, pady=5)
-            tk.Button(f_acts, text="Zielen (Aim)", command=lambda: self.perform_action("Aim"), **btn_cfg).grid(row=1, column=0, padx=5, pady=5)
-            tk.Button(f_acts, text="Ausweichen (Dodge)", command=lambda: self.perform_action("Dodge"), **btn_cfg).grid(row=1, column=1, padx=5, pady=5)
-            tk.Button(f_acts, text="Bereitschaft", command=lambda: self.perform_action("Standby"), **btn_cfg).grid(row=2, column=0, padx=5, pady=5)
-            tk.Button(f_acts, text="Erholung", command=lambda: self.perform_action("Recover"), **btn_cfg).grid(row=2, column=1, padx=5, pady=5)
+            if self.active_side == "Opponent":
+                tk.Label(f_acts, text="Führe AI-Aktionen aus:", font=("Segoe UI", 12, "bold"), fg="red").grid(row=0, column=0, columnspan=2, pady=5)
+                start_row = 1
+            else:
+                start_row = 0
 
-            tk.Button(f_acts, text="Aktivierung Beenden", command=self.end_activation, bg="#F44336", fg="white", font=("bold")).grid(row=3, column=0, columnspan=2, pady=15)
+            tk.Button(f_acts, text="Bewegung", command=lambda: self.perform_action("Move"), **btn_cfg).grid(row=start_row, column=0, padx=5, pady=5)
+            tk.Button(f_acts, text="Angriff", command=lambda: self.perform_action("Attack"), **btn_cfg).grid(row=start_row, column=1, padx=5, pady=5)
+            tk.Button(f_acts, text="Zielen (Aim)", command=lambda: self.perform_action("Aim"), **btn_cfg).grid(row=start_row+1, column=0, padx=5, pady=5)
+            tk.Button(f_acts, text="Ausweichen (Dodge)", command=lambda: self.perform_action("Dodge"), **btn_cfg).grid(row=start_row+1, column=1, padx=5, pady=5)
+            tk.Button(f_acts, text="Bereitschaft", command=lambda: self.perform_action("Standby"), **btn_cfg).grid(row=start_row+2, column=0, padx=5, pady=5)
+            tk.Button(f_acts, text="Erholung", command=lambda: self.perform_action("Recover"), **btn_cfg).grid(row=start_row+2, column=1, padx=5, pady=5)
 
-        elif self.active_side == "Player" and (self.is_panicked or self.actions_remaining <= 0):
+            tk.Button(f_acts, text="Aktivierung Beenden", command=self.end_activation, bg="#F44336", fg="white", font=("bold")).grid(row=start_row+3, column=0, columnspan=2, pady=15)
+
+        elif (self.active_side == "Player" or (self.active_side == "Opponent" and self.ai_enabled.get())) and (self.is_panicked or self.actions_remaining <= 0):
              tk.Button(f_acts, text="Aktivierung Beenden", command=self.end_activation, bg="#F44336", fg="white", font=("bold")).pack()
 
     def perform_action(self, action_type):
@@ -936,9 +1012,9 @@ class GameCompanion:
         else:
             # Move only or Panic
             # Show Dialog
-            msg = f"Einheit: {unit_name}\n\n" + "\n".join(instructions) + "\n\nBitte führe diese Aktionen auf dem Tisch aus."
+            msg = f"Einheit: {unit_name}\n\n" + "\n".join(instructions) + "\n\nBitte führe diese Aktionen auf dem Tisch aus.\n\nKlicke nach jeder Aktion auf 'Aktivierung Beenden' wenn alle Aktionen ausgeführt wurden."
             messagebox.showinfo("AI Zug Anweisung", msg)
-            self.end_activation()
+            # Don't end activation automatically - let user control
 
     def ai_query_targets(self, unit, is_melee):
         top = tk.Toplevel(self.root)
@@ -998,8 +1074,7 @@ class GameCompanion:
 
     def ai_decide_and_attack(self, valid_targets, best_weapon):
         if not valid_targets:
-            messagebox.showinfo("AI Info", "Keine Ziele in Reichweite. AI führt Bewegung durch.")
-            self.end_activation()
+            messagebox.showinfo("AI Info", "Keine Ziele in Reichweite. AI sollte Bewegung oder andere Aktion durchführen.\n\nBitte führe eine passende Aktion für die AI-Einheit durch und klicke dann die entsprechenden Aktions-Buttons.")
             return
 
         # Logic: Pick Lowest HP, then Random
