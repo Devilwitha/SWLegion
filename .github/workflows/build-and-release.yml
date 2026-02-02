@@ -17,12 +17,12 @@ jobs:
       uses: actions/checkout@v4
       
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.11'
         
     - name: Cache pip dependencies
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: ~\AppData\Local\pip\Cache
         key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
@@ -72,7 +72,7 @@ jobs:
         Write-Host "Installer created successfully"
         
     - name: Upload build artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: SWLegion-Build-${{ github.sha }}
         path: |
@@ -81,7 +81,7 @@ jobs:
         retention-days: 30
         
     - name: Upload installer artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: SWLegion-Installer-${{ github.sha }}
         path: build/Win/InstallerSetup/SWLegion_Installer.exe
@@ -97,7 +97,7 @@ jobs:
       uses: actions/checkout@v4
       
     - name: Download installer artifact
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: SWLegion-Installer-${{ github.sha }}
         path: ./release
@@ -142,7 +142,7 @@ jobs:
     
     steps:
     - name: Download installer artifact
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: SWLegion-Installer-${{ github.sha }}
         path: ./test

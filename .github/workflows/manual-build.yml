@@ -27,7 +27,7 @@ jobs:
       uses: actions/checkout@v4
       
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.11'
         
@@ -63,14 +63,14 @@ jobs:
         
     - name: Upload installer (if created)
       if: ${{ github.event.inputs.build_type == 'installer' || github.event.inputs.build_type == 'both' }}
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: SWLegion-Installer-Manual
         path: build/Win/InstallerSetup/SWLegion_Installer.exe
         
     - name: Upload portable package (if created)
       if: ${{ github.event.inputs.build_type == 'portable' || github.event.inputs.build_type == 'both' }}
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: SWLegion-Portable-Manual
         path: build/Win/SWLegion_Portable.zip
