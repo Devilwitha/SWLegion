@@ -6,6 +6,8 @@ import os
 import logging
 from LegionData import LegionDatabase
 from LegionRules import LegionRules
+from PIL import Image, ImageTk
+from PIL import Image, ImageTk
 
 class GameCompanion:
     def __init__(self, root):
@@ -16,10 +18,20 @@ class GameCompanion:
         logging.info("GameCompanion initialized.")
         self.root.title("SW Legion: Game Companion & AI Simulator (v2.0 Rules)")
         self.root.geometry("1400x900")
+        
+        # Set window icon
+        try:
+            icon_img = Image.open("bilder/SW_legion_logo.png")
+            icon_img = icon_img.resize((32, 32), Image.Resampling.LANCZOS)
+            self.icon_photo = ImageTk.PhotoImage(icon_img)
+            self.root.iconphoto(True, self.icon_photo)
+        except:
+            pass
 
         # Game State
         self.player_army = {"faction": "", "units": []}
         self.opponent_army = {"faction": "", "units": []}
+        self.mission_data = None  # Initialize mission_data
 
         # New State Variables
         self.round_number = 0
@@ -184,7 +196,12 @@ class GameCompanion:
         for item in tree.get_children():
             tree.delete(item)
         for u in units:
-            status = "Bereit" if not u["activated"] else "Aktiviert"
+            if u.get("activated"):
+                status = "Aktiviert"
+            elif u.get("order_token"):
+                status = "Offener Befehl"
+            else:
+                status = "Bereit"
             minis = u.get("minis", 1)
             tree.insert("", "end", values=(u["name"], minis, f"{u['current_hp']}/{u['hp']}", status))
 
@@ -238,8 +255,64 @@ class GameCompanion:
 
         txt = tk.Text(top, wrap="word", font=("Segoe UI", 11), padx=10, pady=10)
         txt.pack(fill="both", expand=True)
-        txt.insert("1.0", self.mission_data.get("scenario_text", ""))
+        
+        # Configure bold formatting tag
+        txt.tag_configure("bold", font=("Segoe UI", 11, "bold"))
+        txt.tag_configure("italic", font=("Segoe UI", 11, "italic"))
+        
+        # Parse and insert formatted text
+        scenario_text = self.mission_data.get("scenario_text", "")
+        self.insert_formatted_text(txt, scenario_text)
+        
         txt.config(state=tk.DISABLED)
+
+    def insert_formatted_text(self, text_widget, content):
+        """Simple formatting: Bold titles and bullet points"""
+        text_widget.delete("1.0", tk.END)
+        
+        lines = content.split('\n')
+        for line in lines:
+            line = line.strip()
+            
+            # Skip empty lines
+            if not line:
+                text_widget.insert(tk.END, '\n')
+                continue
+            
+            # Check if it's a title (ends with : or contains **text**)
+            is_title = False
+            if line.endswith(':') or '**' in line:
+                is_title = True
+            
+            # Remove ** markers if present
+            clean_line = line.replace('**', '')
+            
+            # Check if it's a bullet point (starts with * or numbered)
+            is_bullet = line.startswith('*') or line.startswith('-') or (len(line) > 2 and line[0].isdigit() and line[1] == '.')
+            
+            # Format the line
+            if is_title:
+                # Insert as bold title
+                start_pos = text_widget.index(tk.END)
+                text_widget.insert(tk.END, clean_line)
+                end_pos = text_widget.index(tk.END)
+                text_widget.tag_add("bold", start_pos, end_pos)
+            elif is_bullet:
+                # Convert to bullet point with -
+                if line.startswith('*'):
+                    bullet_text = '- ' + line[1:].strip()
+                elif line.startswith('-'):
+                    bullet_text = line
+                elif line[0].isdigit() and line[1] == '.':
+                    bullet_text = '- ' + line[2:].strip()
+                else:
+                    bullet_text = '- ' + line
+                text_widget.insert(tk.END, bullet_text)
+            else:
+                # Regular text
+                text_widget.insert(tk.END, clean_line)
+            
+            text_widget.insert(tk.END, '\n')
 
     def start_setup_phase(self):
         self.current_phase = "Setup"
@@ -251,7 +324,8 @@ class GameCompanion:
 
         if self.mission_data:
             m = self.mission_data
-            txt = (f"MISSION: {m.get('mission_type', '-')}\n"
+            rounds_text = f" ({m.get('rounds', 6)} Runden)" if m.get('rounds') else ""
+            txt = (f"MISSION: {m.get('mission_type', '-')}{rounds_text}\n"
                    f"AUFSTELLUNG: {m.get('deployment', '-')}\n"
                    f"PUNKTE: {m.get('points', '-')}\n\n"
                    f"SPIELER (BLAU): {m.get('blue_faction', '-')}\n"
@@ -684,13 +758,12 @@ class GameCompanion:
             face_up_count = face_up_p if self.active_turn_player == "Player" else face_up_o
 
             if face_up_count > 0:
-                tk.Label(f_acts, text="--- ODER Wähle Einheit (Offener Befehl) ---").pack(pady=10)
+                tk.Label(f_acts, text="--- Wähle Einheit (Offener Befehl) ---").pack(pady=10)
                 for u in current_army["units"]:
-                    if u.get("order_token") and not u.get("activated"):
+                    if u.get("order_token") and not u.get("activated") and u["current_hp"] > 0:
                         tk.Button(f_acts, text=f"Aktiviere: {u['name']}", command=lambda unit=u: self.activate_unit(unit, self.active_turn_player)).pack(fill="x", pady=2)
 
-            # Pass Button (Optional, not strictly checking count diff here for simplicity)
-            tk.Button(f_acts, text="Passen (Runde beenden / Nächster)", command=self.pass_turn, bg="#9E9E9E", fg="white").pack(pady=20)
+            # No big pass button - players alternate after each unit
 
         else:
             # AI Turn
@@ -744,24 +817,45 @@ class GameCompanion:
             logging.info(f"AI activating unit: {unit_to_activate['name']}")
             self.activate_unit(unit_to_activate, "Opponent")
         else:
-            # No units left? Pass.
-            logging.info("AI passing turn (no units left).")
-            self.pass_turn()
+            # No units left? Check if player has units - if yes, pass turn, if no, end phase
+            p_face_up = any(u.get("order_token") and not u.get("activated") and u["current_hp"] > 0 for u in self.player_army["units"])
+            p_pool = any(t["side"] == "Player" for t in self.order_pool)
+            p_rem = p_face_up or p_pool
+            
+            if p_rem:
+                logging.info("AI passing turn (no units left, player has units).")
+                self.pass_turn()
+            else:
+                logging.info("AI and Player both done, ending phase.")
+                self.end_phase()
 
     def pass_turn(self):
-        # Toggle Turn Player
-        self.active_turn_player = "Opponent" if self.active_turn_player == "Player" else "Player"
-
-        # Check if Round End (Both passed or no activations left?)
-        # Simplified: If both pools empty and no face-ups?
-
-        p_rem = any(not u.get("activated") and u["current_hp"] > 0 for u in self.player_army["units"])
-        o_rem = any(not u.get("activated") and u["current_hp"] > 0 for u in self.opponent_army["units"])
-
-        if not p_rem and not o_rem:
+        # This is for the big "Pass Turn" button - mark all remaining units as activated
+        current_army = self.player_army if self.active_turn_player == "Player" else self.opponent_army
+        
+        for unit in current_army["units"]:
+            if not unit.get("activated") and unit["current_hp"] > 0:
+                unit["activated"] = True
+        
+        # Remove current player's tokens from order pool
+        self.order_pool = [t for t in self.order_pool if t["side"] != self.active_turn_player]
+        
+        # Check if all units are activated
+        p_remaining = any(not u.get("activated") and u["current_hp"] > 0 for u in self.player_army["units"])
+        o_remaining = any(not u.get("activated") and u["current_hp"] > 0 for u in self.opponent_army["units"])
+        
+        if not p_remaining and not o_remaining:
+            # All units activated - end round
             self.end_phase()
         else:
-            self.start_turn()
+            # Check if other player still has units
+            if (self.active_turn_player == "Player" and o_remaining) or (self.active_turn_player == "Opponent" and p_remaining):
+                # Other player continues
+                self.active_turn_player = "Opponent" if self.active_turn_player == "Player" else "Player"
+                self.start_turn()
+            else:
+                # Both sides are done - end round
+                self.end_phase()
 
     def activate_unit(self, unit, side):
         self.active_unit = unit
@@ -842,19 +936,28 @@ class GameCompanion:
         f_acts = tk.Frame(self.frame_center)
         f_acts.pack(pady=10)
 
-        if self.active_side == "Player" and not self.is_panicked and self.actions_remaining > 0:
+        if (self.active_side == "Player" or (self.active_side == "Opponent" and self.ai_enabled.get())) and not self.is_panicked and self.actions_remaining > 0:
             btn_cfg = {"font": ("Segoe UI", 10), "width": 15, "bg": "#2196F3", "fg": "white"}
 
-            tk.Button(f_acts, text="Bewegung", command=lambda: self.perform_action("Move"), **btn_cfg).grid(row=0, column=0, padx=5, pady=5)
-            tk.Button(f_acts, text="Angriff", command=lambda: self.perform_action("Attack"), **btn_cfg).grid(row=0, column=1, padx=5, pady=5)
-            tk.Button(f_acts, text="Zielen (Aim)", command=lambda: self.perform_action("Aim"), **btn_cfg).grid(row=1, column=0, padx=5, pady=5)
-            tk.Button(f_acts, text="Ausweichen (Dodge)", command=lambda: self.perform_action("Dodge"), **btn_cfg).grid(row=1, column=1, padx=5, pady=5)
-            tk.Button(f_acts, text="Bereitschaft", command=lambda: self.perform_action("Standby"), **btn_cfg).grid(row=2, column=0, padx=5, pady=5)
-            tk.Button(f_acts, text="Erholung", command=lambda: self.perform_action("Recover"), **btn_cfg).grid(row=2, column=1, padx=5, pady=5)
+            if self.active_side == "Opponent":
+                tk.Label(f_acts, text="Führe AI-Aktionen aus:", font=("Segoe UI", 12, "bold"), fg="red").grid(row=0, column=0, columnspan=2, pady=5)
+                start_row = 1
+            else:
+                start_row = 0
 
-            tk.Button(f_acts, text="Aktivierung Beenden", command=self.end_activation, bg="#F44336", fg="white", font=("bold")).grid(row=3, column=0, columnspan=2, pady=15)
+            tk.Button(f_acts, text="Bewegung", command=lambda: self.perform_action("Move"), **btn_cfg).grid(row=start_row, column=0, padx=5, pady=5)
+            tk.Button(f_acts, text="Angriff", command=lambda: self.perform_action("Attack"), **btn_cfg).grid(row=start_row, column=1, padx=5, pady=5)
+            tk.Button(f_acts, text="Zielen (Aim)", command=lambda: self.perform_action("Aim"), **btn_cfg).grid(row=start_row+1, column=0, padx=5, pady=5)
+            tk.Button(f_acts, text="Ausweichen (Dodge)", command=lambda: self.perform_action("Dodge"), **btn_cfg).grid(row=start_row+1, column=1, padx=5, pady=5)
+            tk.Button(f_acts, text="Bereitschaft", command=lambda: self.perform_action("Standby"), **btn_cfg).grid(row=start_row+2, column=0, padx=5, pady=5)
+            tk.Button(f_acts, text="Erholung", command=lambda: self.perform_action("Recover"), **btn_cfg).grid(row=start_row+2, column=1, padx=5, pady=5)
 
-        elif self.active_side == "Player" and (self.is_panicked or self.actions_remaining <= 0):
+            # Pass Button für einzelne Einheit
+            tk.Button(f_acts, text="Einheit Passen", command=self.pass_current_unit, bg="#FF9800", fg="white", font=("bold")).grid(row=start_row+3, column=0, padx=5, pady=5)
+            tk.Button(f_acts, text="Aktivierung Beenden", command=self.end_activation, bg="#F44336", fg="white", font=("bold")).grid(row=start_row+3, column=1, padx=5, pady=5)
+
+        elif (self.active_side == "Player" or (self.active_side == "Opponent" and self.ai_enabled.get())) and (self.is_panicked or self.actions_remaining <= 0):
+             tk.Button(f_acts, text="Einheit Passen", command=self.pass_current_unit, bg="#FF9800", fg="white", font=("bold")).pack(pady=5)
              tk.Button(f_acts, text="Aktivierung Beenden", command=self.end_activation, bg="#F44336", fg="white", font=("bold")).pack()
 
     def perform_action(self, action_type):
@@ -888,6 +991,17 @@ class GameCompanion:
             self.update_actions_ui()
             self.update_trees()
 
+    def pass_current_unit(self):
+        # Mark only the current unit as activated (pass without actions)
+        if self.active_unit:
+            self.active_unit["activated"] = True
+            logging.info(f"Unit {self.active_unit['name']} passed (no actions taken)")
+            # Update tree to show new status
+            self.update_trees()
+        
+        # Continue with next player's turn
+        self.check_and_continue_turn()
+    
     def end_activation(self):
         # End effects
         if self.is_panicked:
@@ -897,8 +1011,39 @@ class GameCompanion:
                 self.active_unit["suppression"] = max(0, self.active_unit["suppression"] - val)
             except: pass
 
+        # Mark unit as activated
+        if self.active_unit:
+            self.active_unit["activated"] = True
+            logging.info(f"Unit {self.active_unit['name']} finished activation")
+            # Update tree to show new status
+            self.update_trees()
+        
+        # Continue with next player's turn
+        self.check_and_continue_turn()
+    
+    def check_and_continue_turn(self):
         self.active_unit = None
-        self.pass_turn()
+        
+        # Check if all units are activated
+        p_remaining = any(not u.get("activated") and u["current_hp"] > 0 for u in self.player_army["units"])
+        o_remaining = any(not u.get("activated") and u["current_hp"] > 0 for u in self.opponent_army["units"])
+        
+        if not p_remaining and not o_remaining:
+            # All units activated - end round
+            self.end_phase()
+        else:
+            # Switch to the other player
+            self.active_turn_player = "Opponent" if self.active_turn_player == "Player" else "Player"
+            
+            # Check if current player has remaining units
+            current_remaining = p_remaining if self.active_turn_player == "Player" else o_remaining
+            
+            if not current_remaining:
+                # Current player has no units left, switch back to other player
+                self.active_turn_player = "Opponent" if self.active_turn_player == "Player" else "Player"
+            
+            # Continue with next turn
+            self.start_turn()
 
     def ai_perform_actions(self):
         # Generate instructions for the human player
@@ -936,9 +1081,9 @@ class GameCompanion:
         else:
             # Move only or Panic
             # Show Dialog
-            msg = f"Einheit: {unit_name}\n\n" + "\n".join(instructions) + "\n\nBitte führe diese Aktionen auf dem Tisch aus."
+            msg = f"Einheit: {unit_name}\n\n" + "\n".join(instructions) + "\n\nBitte führe diese Aktionen auf dem Tisch aus.\n\nVerwende die Action-Buttons um die Aktionen durchzuführen."
             messagebox.showinfo("AI Zug Anweisung", msg)
-            self.end_activation()
+            # Keep activation UI active so user can perform actions manually
 
     def ai_query_targets(self, unit, is_melee):
         top = tk.Toplevel(self.root)
@@ -998,8 +1143,7 @@ class GameCompanion:
 
     def ai_decide_and_attack(self, valid_targets, best_weapon):
         if not valid_targets:
-            messagebox.showinfo("AI Info", "Keine Ziele in Reichweite. AI führt Bewegung durch.")
-            self.end_activation()
+            messagebox.showinfo("AI Info", "Keine Ziele in Reichweite. AI sollte Bewegung oder andere Aktion durchführen.\n\nBitte führe eine passende Aktion für die AI-Einheit durch und klicke dann die entsprechenden Aktions-Buttons.")
             return
 
         # Logic: Pick Lowest HP, then Random
@@ -1016,7 +1160,7 @@ class GameCompanion:
     def open_move_dialog(self):
         top = tk.Toplevel(self.root)
         top.title("Bewegung")
-        top.geometry("300x250")
+        top.geometry("450x400")
 
         unit = self.active_unit
         max_speed = unit.get("speed", 2)
@@ -1119,14 +1263,17 @@ class GameCompanion:
 
         self.update_trees()
 
-        # Reset Active View
-        self.lbl_active_name.config(text="-")
-        self.lbl_active_stats.config(text="")
+        # Reset Active View (safe check if they exist)
+        if hasattr(self, 'lbl_active_name'):
+            self.lbl_active_name.config(text="-")
+        if hasattr(self, 'lbl_active_stats'):
+            self.lbl_active_stats.config(text="")
         self.active_unit = None
 
-        # Next Round Button
-        if self.round_number >= 6:
-            tk.Label(self.frame_center, text="SPIELENDE (Runde 6 erreicht)", font=("Segoe UI", 24, "bold"), fg="red").pack(pady=20)
+        # Next Round Button - use configurable max rounds
+        max_rounds = self.mission_data.get('rounds', 6) if self.mission_data else 6
+        if self.round_number >= max_rounds:
+            tk.Label(self.frame_center, text=f"SPIELENDE (Runde {max_rounds} erreicht)", font=("Segoe UI", 24, "bold"), fg="red").pack(pady=20)
             tk.Button(self.frame_center, text="Spiel beenden", command=self.root.destroy, bg="#F44336", fg="white").pack()
         else:
             self.round_number += 1
@@ -1148,23 +1295,27 @@ class GameCompanion:
         self.active_side = side
         unit["activated"] = True
 
-        # UI Updates
+        # UI Updates (safe check if labels exist)
         color = "#2196F3" if side == "Player" else "#F44336"
-        self.lbl_active_name.config(text=f"{unit['name']} ({side})", fg=color)
+        if hasattr(self, 'lbl_active_name'):
+            self.lbl_active_name.config(text=f"{unit['name']} ({side})", fg=color)
 
         stats_text = (f"Bewegung: {unit.get('speed', '-')}\n"
                       f"Verteidigung: {unit.get('defense', '-')}\n"
                       f"HP: {unit['current_hp']}/{unit['hp']} | Mut: {unit['courage']}\n"
                       f"Keywords: {unit.get('info', '')}")
-        self.lbl_active_stats.config(text=stats_text)
+        if hasattr(self, 'lbl_active_stats'):
+            self.lbl_active_stats.config(text=stats_text)
 
         # Update Trees (um 'Aktiviert' Status zu zeigen)
         self.update_trees()
 
-        self.lbl_phase.config(text=f"Pool: {len(self.order_pool)} verbleibend")
+        if hasattr(self, 'lbl_phase'):
+            self.lbl_phase.config(text=f"Pool: {len(self.order_pool)} verbleibend")
 
         # Buttons aktivieren
-        self.btn_attack.config(state=tk.NORMAL, command=self.open_attack_dialog)
+        if hasattr(self, 'btn_attack'):
+            self.btn_attack.config(state=tk.NORMAL, command=self.open_attack_dialog)
 
         # AI LOGIC
         if side == "Opponent" and self.ai_enabled.get():

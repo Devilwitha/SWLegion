@@ -10,6 +10,7 @@ class LegionDatabase:
         self.units = {}
         self.upgrades = []
         self.command_cards = []
+        self.battle_cards = []
 
         # --- TRANSLATION MAP (Generated from previous data) ---
         self.translations = {
@@ -158,6 +159,69 @@ class LegionDatabase:
         self.load_catalog()
         self.load_legacy()
         self.load_custom_units()
+        self.load_custom_command_cards()
+        self.load_custom_upgrades()
+        self.load_custom_battle_cards()
+
+    def load_custom_battle_cards(self):
+        """Loads custom battle cards from custom_battle_cards.json."""
+        if not os.path.exists("custom_battle_cards.json"):
+            return
+
+        try:
+            logging.info("Loading custom battle cards...")
+            with open("custom_battle_cards.json", "r", encoding="utf-8") as f:
+                cards = json.load(f)
+
+            for c in cards:
+                c["is_custom"] = True
+                self.battle_cards.append(c)
+
+        except Exception as e:
+            logging.error(f"Error loading custom battle cards: {e}")
+
+    def load_custom_upgrades(self):
+        """Loads custom upgrades from custom_upgrades.json."""
+        if not os.path.exists("custom_upgrades.json"):
+            return
+
+        try:
+            logging.info("Loading custom upgrades...")
+            with open("custom_upgrades.json", "r", encoding="utf-8") as f:
+                upgrades = json.load(f)
+
+            for u in upgrades:
+                u["is_custom"] = True
+                self.upgrades.append(u)
+
+        except Exception as e:
+            logging.error(f"Error loading custom upgrades: {e}")
+
+    def load_custom_command_cards(self):
+        """Loads custom command cards from custom_command_cards.json."""
+        if not os.path.exists("custom_command_cards.json"):
+            return
+
+        try:
+            logging.info("Loading custom command cards...")
+            with open("custom_command_cards.json", "r", encoding="utf-8") as f:
+                cards = json.load(f)
+
+            for c in cards:
+                # Format needs to match what Army Builder expects
+                # Army Builder checks 'ger_faction' or 'faction'
+                # Custom cards have a LIST of factions.
+                # We need to duplicate the card object for each faction to ensure simple filtering later?
+                # Or just ensure get_command_cards handles it.
+
+                # Let's adjust get_command_cards instead, but we need to store these carefully.
+                # Just append them to self.command_cards with a special flag?
+
+                c["is_custom"] = True
+                self.command_cards.append(c)
+
+        except Exception as e:
+            logging.error(f"Error loading custom command cards: {e}")
 
     def load_custom_units(self):
         """Loads custom units from custom_units.json."""
@@ -462,6 +526,17 @@ class LegionDatabase:
         """Returns command cards for the given faction (and neutral ones)."""
         cards = []
         for c in self.command_cards:
+            # Standard logic
+            is_valid = False
             if c.get("ger_faction") == faction_name or c.get("faction") == "neutral":
+                is_valid = True
+
+            # Custom logic (list of factions)
+            if c.get("is_custom"):
+                factions = c.get("factions", [])
+                if faction_name in factions or "Neutral" in factions:
+                    is_valid = True
+
+            if is_valid:
                 cards.append(c)
         return cards

@@ -8,3 +8,71 @@
 2026-02-02 07:57:16,120 - root - INFO - Launching submodule: ArmeeBuilder.py
 2026-02-02 08:06:15,222 - root - INFO - Logging initialized.
 2026-02-02 08:06:21,413 - root - INFO - Launching submodule: ArmeeBuilder.py
+2026-02-02 08:34:48,301 - root - INFO - Logging initialized.
+2026-02-02 08:34:49,970 - root - INFO - Launching submodule: ArmeeBuilder.py
+2026-02-02 08:35:49,260 - root - INFO - Logging initialized.
+2026-02-02 08:35:51,011 - root - INFO - Launching submodule: CustomUnitCreator.py
+2026-02-02 08:38:26,959 - root - INFO - Launching submodule: ArmeeBuilder.py
+2026-02-02 08:40:50,522 - root - INFO - Launching submodule: MissionBuilder.py
+2026-02-02 08:43:08,395 - root - INFO - Launching submodule: GameCompanion.py
+2026-02-02 09:33:06,871 - root - INFO - Logging initialized.
+2026-02-02 09:33:09,467 - root - INFO - Launching submodule: CustomFactoryMenu.py
+2026-02-02 09:33:58,228 - root - INFO - Launching submodule: CustomFactoryMenu.py
+2026-02-02 09:35:27,503 - root - INFO - Launching submodule: MissionBuilder.py
+2026-02-02 10:10:37,923 - root - INFO - Logging initialized.
+2026-02-02 10:10:39,078 - root - INFO - Launching submodule: CustomFactoryMenu.py
+2026-02-02 10:12:42,294 - root - INFO - Launching submodule: GameCompanion.py
+2026-02-02 10:12:44,785 - root - INFO - Launching submodule: MissionBuilder.py
+2026-02-02 10:13:16,265 - root - INFO - Launching submodule: CustomFactoryMenu.py
+2026-02-02 10:13:25,694 - root - INFO - Launching submodule: MissionBuilder.py
+2026-02-02 10:18:05,977 - root - INFO - Logging initialized.
+2026-02-02 10:26:06,783 - root - INFO - Logging initialized.
+2026-02-02 10:26:08,748 - root - INFO - Launching submodule: CustomFactoryMenu.py
+2026-02-02 10:27:20,328 - root - INFO - Launching submodule: MissionBuilder.py
+2026-02-02 10:27:23,721 - root - INFO - Launching submodule: MissionBuilder.py
+2026-02-02 10:27:27,100 - root - INFO - Launching submodule: CustomFactoryMenu.py
+2026-02-02 10:27:29,039 - root - INFO - Launching submodule: ArmeeBuilder.py
+2026-02-02 10:27:58,324 - root - INFO - Launching submodule: GameCompanion.py
+2026-02-02 10:30:05,910 - root - INFO - Launching submodule: MissionBuilder.py
+2026-02-02 10:31:35,285 - root - INFO - Logging initialized.
+2026-02-02 10:35:31,467 - root - INFO - Logging initialized.
+2026-02-02 10:35:33,249 - root - INFO - Launching submodule: MissionBuilder.py
+2026-02-02 10:35:45,279 - root - INFO - Launching submodule: MissionBuilder.py
+2026-02-02 10:35:46,984 - root - INFO - Launching submodule: GameCompanion.py
+2026-02-02 10:38:29,581 - root - INFO - Logging initialized.
+2026-02-02 10:38:31,357 - root - INFO - Launching submodule: MissionBuilder.py
+2026-02-02 10:44:40,112 - root - INFO - Launching submodule: CustomFactoryMenu.py
+2026-02-02 10:44:48,969 - root - INFO - Launching submodule: MissionBuilder.py
+2026-02-02 10:46:15,240 - root - INFO - Launching submodule: GameCompanion.py
+2026-02-02 10:49:23,862 - root - INFO - Logging initialized.
+2026-02-02 10:49:27,186 - root - INFO - Launching submodule: MissionBuilder.py
+2026-02-02 10:50:16,441 - root - INFO - Launching submodule: MissionBuilder.py
+2026-02-02 10:50:19,775 - root - INFO - Launching submodule: GameCompanion.py
+2026-02-02 10:52:36,576 - root - INFO - Logging initialized.
+2026-02-02 10:52:38,317 - root - INFO - Launching submodule: MissionBuilder.py
+2026-02-02 10:53:20,075 - root - INFO - Launching submodule: GameCompanion.py
+2026-02-02 10:55:22,870 - root - INFO - Logging initialized.
+2026-02-02 10:55:25,241 - root - INFO - Launching submodule: MissionBuilder.py
+2026-02-02 10:56:13,470 - root - INFO - Launching submodule: GameCompanion.py
+2026-02-02 11:03:48,084 - root - INFO - Logging initialized.
+2026-02-02 11:05:42,737 - root - INFO - Logging initialized.
+2026-02-02 11:06:03,652 - root - INFO - Logging initialized.
+2026-02-02 11:10:26,136 - root - INFO - Logging initialized.
+2026-02-02 11:12:09,273 - root - INFO - Logging initialized.
+2026-02-02 11:12:09,473 - root - INFO - Logging initialized.
+2026-02-02 11:13:57,432 - root - INFO - Logging initialized.
+2026-02-02 11:14:07,699 - root - INFO - Logging initialized.
+2026-02-02 11:16:12,354 - root - INFO - Logging initialized.
+2026-02-02 11:16:43,349 - root - INFO - Logging initialized.
+2026-02-02 11:17:12,522 - root - INFO - Logging initialized.
+2026-02-02 11:17:52,079 - root - INFO - Logging initialized.
+2026-02-02 11:18:14,902 - root - INFO - Logging initialized.
+2026-02-02 11:18:36,318 - root - INFO - Logging initialized.
+2026-02-02 11:18:52,407 - root - INFO - Launching submodule: GameCompanion.py
+2026-02-02 11:22:34,104 - root - INFO - Logging initialized.
+2026-02-02 11:33:20,167 - root - INFO - Logging initialized.
+2026-02-02 11:33:23,074 - root - INFO - Launching submodule: GameCompanion.py
+2026-02-02 11:33:36,521 - root - INFO - Launching submodule: MissionBuilder.py
+2026-02-02 11:34:33,677 - root - INFO - Launching submodule: GameCompanion.py
+2026-02-02 11:36:25,203 - root - INFO - Logging initialized.
+2026-02-02 11:36:27,968 - root - INFO - Launching submodule: GameCompanion.py

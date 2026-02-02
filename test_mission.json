@@ -1,0 +1,10 @@
+{
+  "deployment": "Battle Lines",
+  "mission_type": "Abfangen (Intercept)",
+  "blue_faction": "Rebellenallianz",
+  "red_faction": "Galaktisches Imperium",
+  "points": "800",
+  "terrain": ["Wüste (z.B. Tatooine, Geonosis)"],
+  "prompt_text": "",
+  "scenario_text": "**Schlacht um Tatooine**\n\n**Hintergrund:**\nDie Rebellenallianz versucht, wichtige Informationen über imperiale Truppenbewegungen abzufangen.\n\n**Ziele:**\n- **Hauptziel:** Kontrolliere 3 Schlüsselpunkte\n- **Sekundärziel:** Eliminiere feindliche Kommandeure\n\n**Sonderregeln:**\n- **Sandstürme:** Alle Fernkampfangriffe über Range 3 erhalten +1 Cover\n- **Extreme Hitze:** Einheiten verlieren nach Bewegung 1 zusätzlichen Suppression-Token\n\n**Siegbedingungen:**\nDer Spieler mit den meisten Punkten am Ende von Runde 6 gewinnt."
+}
