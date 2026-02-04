@@ -29,6 +29,25 @@ try:
 except ImportError:
     REQUESTS_AVAILABLE = False
 
+# Gemini SDK Setup
+import logging
+try:
+    from google import genai
+    GEMINI_AVAILABLE = True
+    GEMINI_VERSION = 2
+    logging.info("MissionBuilder: Using google-genai (v2) - SUCCESS")
+except ImportError as e:
+    logging.error(f"MissionBuilder: google-genai import failed: {e}")
+    try:
+        import google.generativeai as genai
+        GEMINI_AVAILABLE = True
+        GEMINI_VERSION = 1
+        logging.info("MissionBuilder: Using google.generativeai (v1) - SUCCESS")
+    except ImportError as e2:
+        logging.error(f"MissionBuilder: google.generativeai import failed: {e2}")
+        GEMINI_AVAILABLE = False
+        GEMINI_VERSION = 0
+
 class LegionMissionGenerator:
     def __init__(self, root):
         self.root = root
@@ -375,6 +394,7 @@ class LegionMissionGenerator:
             text_widget.insert(tk.END, '\n')
 
     def save_mission(self):
+        logging.info("Attempting to save mission...")
         # Gather data
         data = {
             "deployment": self.combo_deploy.get(),
@@ -402,6 +422,7 @@ class LegionMissionGenerator:
             self.save_music_settings()
 
         if not data["blue_faction"] or not data["red_faction"]:
+            logging.warning("Save failed: Factions not selected.")
             messagebox.showwarning("Fehler", "Bitte weise beiden Seiten eine Fraktion zu.")
             return
 
@@ -410,8 +431,10 @@ class LegionMissionGenerator:
         file_path = filedialog.asksaveasfilename(initialdir=initial_dir, title="Mission speichern", defaultextension=".json", filetypes=[("JSON", "*.json")])
         if file_path:
             try:
+                logging.info(f"Saving mission to {file_path}")
                 with open(file_path, 'w', encoding='utf-8') as f:
                     json.dump(data, f, indent=4, ensure_ascii=False)
+                logging.info("Mission saved successfully.")
                 messagebox.showinfo("Gespeichert", f"Mission gespeichert in:\n{file_path}")
                 
                 # Musik-Einstellungen speichern (aber nicht starten)
@@ -419,6 +442,7 @@ class LegionMissionGenerator:
                     self.save_music_settings()
                     
             except Exception as e:
+                logging.error(f"Error saving mission: {e}", exc_info=True)
                 messagebox.showerror("Fehler", f"Fehler beim Speichern: {e}")
 
     def update_map(self, event=None):
@@ -722,8 +746,8 @@ class LegionMissionGenerator:
         return prompt
 
     def generate_scenario_with_gemini(self):
-        if not REQUESTS_AVAILABLE:
-            messagebox.showerror("Fehler", "Das Modul 'requests' fehlt. AI-Generierung nicht möglich.")
+        if not GEMINI_AVAILABLE and not REQUESTS_AVAILABLE:
+            messagebox.showerror("Fehler", "Weder google-genai noch requests sind verfügbar.")
             return
 
         if not self.api_key:
@@ -739,29 +763,122 @@ class LegionMissionGenerator:
         self.txt_output.insert(tk.END, "Generiere Szenario mit Gemini AI... Bitte warten...\n")
         self.root.update()
 
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={self.api_key}"
-        headers = {'Content-Type': 'application/json'}
-        data = {
-            "contents": [{
-                "parts": [{"text": prompt}]
-            }]
-        }
-
         try:
-            response = requests.post(url, headers=headers, json=data)
-            if response.status_code == 200:
-                result = response.json()
-                try:
-                    text_content = result['candidates'][0]['content']['parts'][0]['text']
-                    self.current_scenario_text = text_content
-                    self.txt_output.delete("1.0", tk.END)
-                    self.insert_formatted_text(self.txt_output, text_content)
-                except KeyError:
-                    self.txt_output.insert(tk.END, f"\nFehler beim Parsen der Antwort: {result}")
-            else:
-                self.txt_output.insert(tk.END, f"\nAPI Fehler ({response.status_code}): {response.text}")
+            text_content = ""
+            if GEMINI_VERSION == 2:
+                # Use new SDK
+                client = genai.Client(api_key=self.api_key)
+                models_to_try = ['gemini-3-flash-preview', 'gemini-3-pro-preview', 'gemini-2.5-flash', 'gemini-2.0-flash']
+                response = None
+                last_err = None
+
+                for model_name in models_to_try:
+                    try:
+                        logging.info(f"Gemini (v2): Trying model {model_name}")
+                        response = client.models.generate_content(
+                            model=model_name,
+                            contents=[prompt]
+                        )
+                        if response:
+                            logging.info(f"Gemini (v2): Success with {model_name}")
+                            text_content = response.text
+                            break
+                    except Exception as e:
+                        logging.warning(f"Gemini (v2): Failed with {model_name}: {e}")
+                        last_err = e
+                
+                if not text_content:
+                    if last_err:
+                        raise last_err
+                    else:
+                        raise Exception("No response from Gemini (v2)")
+                
+            elif GEMINI_VERSION == 1:
+                # Use old SDK - Try to use 2.0 or just 1.5 if that's all V1 supports, but 1.5 is 404ing.
+                # Attempt to use newer names with V1 if possible
+                genai.configure(api_key=self.api_key)
+                
+                # List of potential models for V1
+                v1_models = ['gemini-2.0-flash', 'gemini-1.5-flash-latest', 'gemini-1.5-pro']
+                model = None
+                
+                for m_name in v1_models:
+                    try:
+                        logging.info(f"Gemini (v1): Trying model {m_name}")
+                        model = genai.GenerativeModel(m_name)
+                        response = model.generate_content(prompt)
+                        text_content = response.text
+                        logging.info(f"Gemini (v1): Success with {m_name}")
+                        break
+                    except Exception as e:
+                         logging.warning(f"Gemini (v1): Failed with {m_name}: {e}")
+
+                if not text_content:
+                     # Fallback to the original one just in case
+                     model = genai.GenerativeModel('gemini-1.5-flash')
+                     response = model.generate_content(prompt)
+                     text_content = response.text
+                
+            elif REQUESTS_AVAILABLE:
+                # Fallback to REST API - Try multiple models
+                # Validated models from API listing (Feb 2026)
+                models = ["gemini-3-flash-preview", "gemini-3-pro-preview", "gemini-2.5-flash", "gemini-2.0-flash"]
+                success = False
+                
+                logging.info(f"MissionBuilder: Starting REST API fallback with models: {models}")
+                
+                for m in models:
+                    # Construct URL - handle whether model string already contains 'models/' or not
+                    if m.startswith("models/"):
+                        model_path = m
+                    else:
+                        model_path = f"models/{m}"
+                        
+                    url = f"https://generativelanguage.googleapis.com/v1beta/{model_path}:generateContent?key={self.api_key}"
+                    headers = {'Content-Type': 'application/json'}
+                    data = {
+                        "contents": [{
+                            "parts": [{"text": prompt}]
+                        }]
+                    }
+                    try:
+                        msg = f"\nVersuche Modell: {m}..."
+                        self.txt_output.insert(tk.END, msg)
+                        print(f"DEBUG: {msg.strip()}")
+                        logging.info(f"MissionBuilder: Trying model {m}")
+                        
+                        self.root.update()
+                        response = requests.post(url, headers=headers, json=data)
+                        
+                        if response.status_code == 200:
+                            result = response.json()
+                            text_content = result['candidates'][0]['content']['parts'][0]['text']
+                            success = True
+                            logging.info(f"MissionBuilder: Success with model {m}")
+                            print(f"DEBUG: Success with model {m}")
+                            break
+                        else:
+                            warn_msg = f"Model {m} failed: {response.status_code} - {response.text}"
+                            logging.warning(warn_msg)
+                            print(f"DEBUG: {warn_msg}")
+                    except Exception as e:
+                        logging.error(f"MissionBuilder: Exception for {m}: {e}")
+                        print(f"DEBUG: Exception for {m}: {e}")
+                        continue
+                        
+                if not success:
+                     err_msg = f"\nAlle Modelle fehlgeschlagen. Letzter Status: {response.status_code if 'response' in locals() else 'Unknown'}"
+                     self.txt_output.insert(tk.END, err_msg)
+                     logging.error(f"MissionBuilder: All fallback models failed.")
+                     return
+
+            # Display Result
+            self.current_scenario_text = text_content
+            self.txt_output.delete("1.0", tk.END)
+            self.insert_formatted_text(self.txt_output, text_content)
+
         except Exception as e:
-            self.txt_output.insert(tk.END, f"\nVerbindungsfehler: {e}")
+            self.txt_output.insert(tk.END, f"\nFehler bei Gemini Anfrage: {e}")
 
     def create_music_section(self, parent):
         """Erstellt die Musik-Einstellungen Sektion"""

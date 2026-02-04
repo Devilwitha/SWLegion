@@ -1,8 +1,20 @@
 import json
 import os
 import logging
-from utilities.LegionRules import LegionRules
-from .LegionUtils import get_data_path
+
+try:
+    # Try package imports (when running from MainMenu)
+    from utilities.LegionRules import LegionRules
+    from utilities.LegionUtils import get_data_path
+except ImportError:
+    try:
+        # Try relative imports (when imported as package sibling)
+        from .LegionRules import LegionRules
+        from .LegionUtils import get_data_path
+    except ImportError:
+        # Fallback to absolute imports (when running as standalone script in utilities/)
+        from LegionRules import LegionRules
+        from LegionUtils import get_data_path
 
 class LegionDatabase:
     def __init__(self):
@@ -171,16 +183,20 @@ class LegionDatabase:
             return
 
         try:
-            logging.info("Loading custom battle cards...")
+            logging.info(f"Loading custom battle cards from {custom_file}...")
             with open(custom_file, "r", encoding="utf-8") as f:
                 cards = json.load(f)
 
+            count = 0
             for c in cards:
                 c["is_custom"] = True
                 self.battle_cards.append(c)
+                count += 1
+            
+            logging.info(f"Successfully loaded {count} custom battle cards.")
 
         except Exception as e:
-            logging.error(f"Error loading custom battle cards: {e}")
+            logging.error(f"Error loading custom battle cards: {e}", exc_info=True)
 
     def load_custom_upgrades(self):
         """Loads custom upgrades from custom_upgrades.json."""
@@ -189,16 +205,20 @@ class LegionDatabase:
             return
 
         try:
-            logging.info("Loading custom upgrades...")
+            logging.info(f"Loading custom upgrades from {custom_file}...")
             with open(custom_file, "r", encoding="utf-8") as f:
                 upgrades = json.load(f)
 
+            count = 0
             for u in upgrades:
                 u["is_custom"] = True
                 self.upgrades.append(u)
+                count += 1
+            
+            logging.info(f"Successfully loaded {count} custom upgrades.")
 
         except Exception as e:
-            logging.error(f"Error loading custom upgrades: {e}")
+            logging.error(f"Error loading custom upgrades: {e}", exc_info=True)
 
     def load_custom_command_cards(self):
         """Loads custom command cards from custom_command_cards.json."""
@@ -207,10 +227,11 @@ class LegionDatabase:
             return
 
         try:
-            logging.info("Loading custom command cards...")
+            logging.info(f"Loading custom command cards from {custom_file}...")
             with open(custom_file, "r", encoding="utf-8") as f:
                 cards = json.load(f)
 
+            count = 0
             for c in cards:
                 # Format needs to match what Army Builder expects
                 # Army Builder checks 'ger_faction' or 'faction'
@@ -223,9 +244,12 @@ class LegionDatabase:
 
                 c["is_custom"] = True
                 self.command_cards.append(c)
+                count += 1
+            
+            logging.info(f"Successfully loaded {count} custom command cards.")
 
         except Exception as e:
-            logging.error(f"Error loading custom command cards: {e}")
+            logging.error(f"Error loading custom command cards: {e}", exc_info=True)
 
     def load_custom_units(self):
         """Loads custom units from custom_units.json."""
@@ -234,10 +258,11 @@ class LegionDatabase:
             return
 
         try:
-            logging.info("Loading custom units...")
+            logging.info(f"Loading custom units from {custom_file}...")
             with open(custom_file, "r", encoding="utf-8") as f:
                 custom_data = json.load(f)
 
+            count = 0
             for entry in custom_data:
                 unit_data = entry.get("unit_data")
                 factions = entry.get("factions", [])
@@ -258,9 +283,12 @@ class LegionDatabase:
                         self.units[faction][existing_idx] = unit_data
                     else:
                         self.units[faction].append(unit_data)
+                count += 1
+            
+            logging.info(f"Successfully loaded {count} custom units entries.")
 
         except Exception as e:
-            logging.error(f"Error loading custom units: {e}")
+            logging.error(f"Error loading custom units: {e}", exc_info=True)
             print(f"Error loading custom units: {e}")
 
     def translate(self, category, key, default=None):

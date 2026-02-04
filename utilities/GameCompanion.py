@@ -5,19 +5,49 @@ import random
 import os
 import logging
 import sys
+import threading
 
 # Optional Libraries for AI/Camera
+GEMINI_IMPORT_ERROR = None
+try:
+    import sys
+    # FORCE site-packages to be checked first for 'google' to avoid shadowing issues
+    site_pkgs = [p for p in sys.path if 'site-packages' in p]
+    for p in site_pkgs:
+        if p not in sys.path:
+            sys.path.insert(0, p)
+            
+    # Try importing google directly first to check namespace
+    import google
+    
+    from google import genai
+    GEMINI_AVAILABLE = True
+    GEMINI_VERSION = 2
+    logging.info("Gemini: Using google-genai (v2/new SDK)")
+except ImportError as e:
+    GEMINI_IMPORT_ERROR = f"google-genai fail: {e}"
+    logging.warning(f"GameCompanion: google-genai import failed: {e}")
+    try:
+        import google.generativeai as genai
+        GEMINI_AVAILABLE = True
+        GEMINI_VERSION = 1
+        logging.info("Gemini: Using google.generativeai (v1/old SDK)")
+    except ImportError as e2:
+        GEMINI_IMPORT_ERROR += f" | google.generativeai fail: {e2}"
+        logging.warning(f"GameCompanion: google.generativeai import failed: {e2}")
+        GEMINI_AVAILABLE = False
+        GEMINI_VERSION = 0
+except Exception as e:
+    GEMINI_IMPORT_ERROR = f"Critical Import Error: {e}"
+    logging.error(f"GameCompanion: CRITICAL error during Gemini import: {e}")
+    GEMINI_AVAILABLE = False
+    GEMINI_VERSION = 0
+
 try:
     import cv2
     CV2_AVAILABLE = True
 except ImportError:
     CV2_AVAILABLE = False
-
-try:
-    import google.generativeai as genai
-    GEMINI_AVAILABLE = True
-except ImportError:
-    GEMINI_AVAILABLE = False
 
 # Import utilities modules with compatibility for both script and package modes
 try:
@@ -104,6 +134,11 @@ class GameCompanion:
         self.current_command_card = None # {"player": card, "opponent": card}
         self.priority_player = "Player" # or "Opponent" (Blue Player)
 
+        # Log Data
+        self.match_log_history = []
+        self.match_start_time = None
+        self.current_log_filepath = None
+
         # Order Pool: Liste von Tupeln (UnitObject, "Player" oder "Opponent")
         self.order_pool = []
         self.active_unit = None
@@ -116,6 +151,101 @@ class GameCompanion:
         # Auto-load mission if provided
         if mission_file:
             self.root.after(500, lambda: self.load_mission_from_file(mission_file))
+
+    def initialize_match_log(self):
+        """Initializes the match log file"""
+        import datetime
+        now = datetime.datetime.now()
+        timestamp = now.strftime("%Y-%m-%d_%H-%M-%S")
+        
+        # Ensure log dir exists
+        log_dir = os.path.join(os.getcwd(), "log")
+        if not os.path.exists(log_dir):
+            try:
+                os.makedirs(log_dir)
+            except:
+                pass
+                
+        filename = f"{timestamp}_battle_log.txt"
+        self.current_log_filepath = os.path.join(log_dir, filename)
+        
+        try:
+            with open(self.current_log_filepath, "w", encoding="utf-8") as f:
+                f.write(f"Star Wars Legion Match Log - {now.strftime('%d.%m.%Y %H:%M')}\n")
+                f.write("==================================================\n\n")
+                if self.mission_data:
+                    f.write(f"Mission: {self.mission_data.get('name', 'N/A')}\n")
+                f.write("--- Event Log Started ---\n")
+            
+            logging.info(f"Match log initialized: {self.current_log_filepath}")
+            self.log_event("Match Log Initialized.")
+            
+        except Exception as e:
+            logging.error(f"Failed to initialize match log: {e}")
+            self.current_log_filepath = None
+
+    def save_match_log(self):
+        """Speichert den Match-Verlauf in log/{datum}battle.txt"""
+        import datetime
+        now = datetime.datetime.now()
+        timestamp = now.strftime("%Y-%m-%d_%H-%M-%S")
+        
+        # Ensure log dir exists
+        log_dir = os.path.join(os.getcwd(), "log")
+        if not os.path.exists(log_dir):
+            try:
+                os.makedirs(log_dir)
+            except:
+                pass
+                
+        filename = f"{timestamp}battle.txt"
+        filepath = os.path.join(log_dir, filename)
+        
+        try:
+            with open(filepath, "w", encoding="utf-8") as f:
+                f.write(f"Star Wars Legion Match Log - {now.strftime('%d.%m.%Y %H:%M')}\n")
+                f.write("==================================================\n\n")
+                
+                f.write(f"Mission: {self.mission_data.get('name', 'Unbekannt') if self.mission_data else 'Keine'}\n")
+                f.write(f"Player Faction: {self.player_army.get('faction', 'N/A')}\n")
+                f.write(f"Opponent Faction: {self.opponent_army.get('faction', 'N/A')}\n")
+                f.write(f"Final Score: Player {self.player_score} - {self.opponent_score} Opponent\n\n")
+                
+                f.write("--- Event Log ---\n")
+                # If we have a structured log list, print it. If not, maybe we just didn't track events yet in this session.
+                # Since we just added self.match_log_history, it will be empty unless we fill it.
+                # So let's write what we have, or a placeholder if empty.
+                if hasattr(self, 'match_log_history') and self.match_log_history:
+                    for entry in self.match_log_history:
+                        f.write(f"{entry}\n")
+                else:
+                    f.write("No detailed events logged in this session.\n")
+                    
+            messagebox.showinfo("Log Saved", f"Match log gespeichert:\n{filename}")
+            logging.info(f"Match log saved to {filepath}")
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Fehler beim Speichern des Logs: {e}")
+            logging.error(f"Failed to save match log: {e}")
+
+    def log_event(self, message):
+        """Helper to add event to log history and file immediately"""
+        import datetime
+        ts = datetime.datetime.now().strftime("%H:%M:%S")
+        entry = f"[{ts}] {message}"
+        
+        if not hasattr(self, 'match_log_history'):
+            self.match_log_history = []
+        self.match_log_history.append(entry)
+        logging.info(f"MATCH_EVENT: {message}")
+        
+        # Write to file immediately if active
+        if getattr(self, 'current_log_filepath', None):
+            try:
+                with open(self.current_log_filepath, "a", encoding="utf-8") as f:
+                    f.write(entry + "\n")
+            except Exception as e:
+                logging.error(f"Failed to append to log file: {e}")
 
     def setup_ui(self):
         # Top Menü Leiste
@@ -149,6 +279,10 @@ class GameCompanion:
         self.lbl_score = tk.Label(self.score_frame, text="Spieler: 0 | Gegner: 0", 
                                  font=("Segoe UI", 12, "bold"), fg="yellow", bg="#333")
         self.lbl_score.pack()
+        
+        # Save Log Button
+        btn_log = tk.Button(self.score_frame, text="💾 LOG", command=self.save_match_log, bg="#607D8B", fg="white", font=("Segoe UI", 8))
+        btn_log.pack(side="right", padx=5)
 
         # Haupt-Container
         self.paned = tk.PanedWindow(self.root, orient=tk.HORIZONTAL)
@@ -600,6 +734,8 @@ class GameCompanion:
         attacker_name = attacker.get("name", "Unbekannt")
         attacker_minis = attacker.get("minis", 1)
         
+        logging.info(f"Executing melee attack: {attacker_name} -> {target_name}")
+
         # Finde Ziel-Einheit
         enemy_army = self.opponent_army if self.active_side == "Player" else self.player_army
         target_unit = None
@@ -610,6 +746,7 @@ class GameCompanion:
                 break
         
         if not target_unit:
+            logging.error(f"Melee Target not found: {target_name}")
             messagebox.showerror("Fehler", "Ziel nicht gefunden!")
             return
             
@@ -638,6 +775,8 @@ class GameCompanion:
         # Schaden berechnen
         damage = max(0, hits - blocks)
         
+        logging.info(f"Melee Result: Dice={attack_dice}, Hits={hits}, Defense={defense_dice}, Blocks={blocks}, Damage={damage}")
+
         # Schaden anwenden (vereinfacht)
         old_hp = target_unit.get("current_hp", 0)
         new_hp = max(0, old_hp - damage)
@@ -659,6 +798,7 @@ class GameCompanion:
                 attacker_old_hp = attacker.get("current_hp", 0)
                 attacker["current_hp"] = max(0, attacker_old_hp - counter_damage)
                 self.apply_figure_damage(attacker, counter_damage)
+                logging.info(f"Counter Attack: {counter_damage} damage to attacker")
         
         # Ergebnis anzeigen
         result_text = f"Nahkampf: {attacker_name} vs {target_name}\n\n"
@@ -814,15 +954,26 @@ class GameCompanion:
                 tree.insert("", "end", values=(u["name"], minis, f"{u['current_hp']}/{u['hp']}", status))
 
     def init_game(self):
+        logging.info("Starting new game initialization...")
         if not self.player_army["units"] and not self.opponent_army["units"]:
+            logging.warning("Game Init Failed: No armies loaded.")
             messagebox.showwarning("Fehler", "Bitte lade mindestens eine Armee.")
             return
+
+        logging.info(f"Armies loaded. Player: {len(self.player_army['units'])} units, Opponent: {len(self.opponent_army['units'])} units.")
+        
+        # Initialize Log
+        self.initialize_match_log()
+        self.log_event(f"Game Started. Player Units: {len(self.player_army['units'])}, Opponent Units: {len(self.opponent_army['units'])}")
+        if self.mission_data:
+             self.log_event(f"Mission: {self.mission_data.get('name', 'Unknown')}")
 
         # UI aufräumen
         for widget in self.frame_center.winfo_children():
             widget.destroy()
 
         # Start Setup Phase
+        logging.info("Entering Setup Phase...")
         self.start_setup_phase()
 
     def load_mission(self):
@@ -1203,6 +1354,7 @@ class GameCompanion:
 
     def start_command_phase(self):
         self.current_phase = "Command"
+        self.log_event(f"--- START ROUND {self.round_number}: COMMAND PHASE ---")
 
         # Reset units for the round
         for u in self.player_army["units"] + self.opponent_army["units"]:
@@ -1293,6 +1445,9 @@ class GameCompanion:
         # Determine Priority
         p_pips = p_card.get("pips", 4)
         o_pips = o_card.get("pips", 4)
+        
+        # LOGGING
+        self.log_event(f"Command Phase: Player executes '{p_card['name']}' ({p_pips}) vs Opponent '{o_card['name']}' ({o_pips}).")
 
         if p_pips < o_pips:
             self.priority_player = "Player"
@@ -1876,6 +2031,7 @@ class GameCompanion:
 
     def start_activation_phase(self):
         self.current_phase = "Activation"
+        self.log_event(f"--- FASE CHANGE: ACTIVATION PHASE (Round {self.round_number}) ---")
         self.active_turn_player = self.priority_player
         self.start_turn()
 
@@ -2157,10 +2313,14 @@ class GameCompanion:
                      command=self.take_manual_control, bg="#FF5722", fg="white").pack(pady=10)
             
             # Auto-Trigger next AI action
-            if self.actions_remaining > 0:
-                self.root.after(1500, self.ai_perform_actions)
+            # Prevent re-opening dialog if AI is currently executing a multi-step plan
+            if getattr(self, 'ai_executing_plan', False):
+                logging.info("AI Execution in progress... Suppressing dialog re-open.")
             else:
-                self.root.after(1500, self.end_activation)
+                if self.actions_remaining > 0:
+                    self.root.after(1500, self.ai_perform_actions)
+                else:
+                    self.root.after(1500, self.end_activation)
 
     def perform_action(self, action_type):
         if self.actions_remaining <= 0 or not self.active_unit: 
@@ -2178,7 +2338,11 @@ class GameCompanion:
         elif action_type == "Attack":
             self.open_attack_dialog()
             return # Don't decrement yet
-        elif action_type == "Aim":
+
+        # LOGGING Simple Actions
+        self.log_event(f"Action: {self.active_unit['name']} performs {action_type}.")
+
+        if action_type == "Aim":
             self.active_unit["aim"] = self.active_unit.get("aim", 0) + 1
             messagebox.showinfo("Zielen", f"{self.active_unit['name']} erhält 1 Zielmarker.\nGesamt: 🎯{self.active_unit['aim']}")
         elif action_type == "Dodge":
@@ -2191,6 +2355,7 @@ class GameCompanion:
         elif action_type == "Melee":
             # Nahkampf-Aktion
             self.open_melee_dialog()
+            return # Don't decrement yet
             return # Don't decrement yet, wait for dialog
             return # Don't decrement yet, wait for dialog
         elif action_type == "Standby":
@@ -2505,7 +2670,7 @@ class GameCompanion:
             logging.error(f"Camera error: {e}")
             return None
 
-    def ask_gemini_decision(self, unit, context_str):
+    def ask_gemini_decision(self, unit, context_str, use_camera=True):
         if not GEMINI_AVAILABLE:
             return "Gemini Bibliothek fehlt."
             
@@ -2514,39 +2679,107 @@ class GameCompanion:
             return "Kein API Key gefunden (gemini_key.txt fehlt oder ist leer)"
             
         try:
-            genai.configure(api_key=api_key)
-            model = genai.GenerativeModel('gemini-pro-vision') # Use vision model
-            
             # Construct Prompt
+            upgrades_list = [u if isinstance(u, str) else u.get('name') for u in unit.get('upgrades', [])]
+            keywords_list = unit.get('keywords', [])
+            
             prompt = f"""
             Du bist ein Star Wars Legion AI Assistent. Entscheide den zug für diese Einheit:
             Name: {unit.get('name')}
             Typ: {unit.get('type', 'Trooper')}
             Waffen: {[w['name'] + ' (Range ' + str(w['range']) + ')' for w in unit.get('weapons', [])]}
+            Keywords: {keywords_list}
+            Upgrades: {upgrades_list}
             Status: HP {unit.get('current_hp')}/{unit.get('hp')}, Suppression: {unit.get('suppression', 0)}
             
-            Situation:
+            Situation & Spielablauf:
             {context_str}
             
             Gib EINE kurze, taktisch kluge Anweisung (2-3 Sätze). Fokus auf Missionsziele oder Eliminierung.
+            Nutze aktive Fähigkeiten der Upgrades wenn sinnvoll!
+            
+            Antworte im Format:
+            "PLAN: [Bewegung/Angriff/Zielen/Ausweichen/Bereitschaft]"
+            "Erklärung: ..."
             """
             
-            # Image handling
-            img_path = self.capture_webcam_image()
-            if img_path:
-                img = cv2.imread(img_path)
-                img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-                from PIL import Image
-                pil_img = Image.fromarray(img_rgb)
-                response = model.generate_content([prompt, pil_img])
-            else:
-                # Fallback text only model if no cam
-                txt_model = genai.GenerativeModel('gemini-pro')
-                response = txt_model.generate_content(prompt)
+            # Helper to get image (Common)
+            pil_img = None
+            if use_camera:
+                img_path = self.capture_webcam_image()
+                if img_path:
+                    img = cv2.imread(img_path)
+                    if img is not None:
+                        img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                        from PIL import Image
+                        pil_img = Image.fromarray(img_rgb)
+
+            # Execute based on SDK Version
+            logging.info(f"Gemini: Starting request with version {GEMINI_VERSION}")
+            if GEMINI_VERSION == 2:
+                # New google-genai SDK
+                msg = f"DEBUG: Using google-genai SDK (Client Mode)"
+                print(msg)
+                logging.info(msg)
+                client = genai.Client(api_key=api_key)
+                contents = [prompt]
+                if pil_img:
+                    contents.append(pil_img)
+                    logging.info("Gemini: Image attached to request")
+                    
+                # Try multiple models in case of 404 or deprecation
+                models_to_try = ['gemini-3-flash-preview', 'gemini-3-pro-preview', 'gemini-2.5-flash', 'gemini-2.0-flash']
+                response = None
+                last_err = None
+
+                for model_name in models_to_try:
+                    try:
+                        msg = f"DEBUG: Trying Gemini Model: {model_name}"
+                        print(msg)
+                        logging.info(msg)
+                        response = client.models.generate_content(
+                            model=model_name,
+                            contents=contents
+                        )
+                        if response:
+                            msg = f"DEBUG: Success with {model_name}"
+                            print(msg)
+                            logging.info(msg)
+                            break
+                    except Exception as e:
+                        msg = f"DEBUG: Failed with {model_name}: {e}"
+                        print(msg)
+                        logging.warning(msg)
+                        last_err = e
                 
-            return response.text
+                if response:
+                    return response.text
+                else:
+                    # If all failed, raise the last error to be caught below
+                    logging.error(f"Gemini: All models failed. Last error: {last_err}")
+                    raise last_err
+                
+            else:
+                # Old google-generativeai SDK
+                msg = "DEBUG: Using legacy google.generativeai SDK"
+                print(msg)
+                logging.info(msg)
+                genai.configure(api_key=api_key)
+                model = genai.GenerativeModel('gemini-1.5-flash') 
+                
+                if pil_img:
+                    logging.info("Gemini: Image attached (legacy)")
+                    response = model.generate_content([prompt, pil_img])
+                else:
+                    response = model.generate_content(prompt)
+                
+                return response.text
+
         except Exception as e:
-            return f"Gemini Error: {e}"
+            err_msg = f"Gemini Error: {e}"
+            print(err_msg)
+            logging.error(err_msg, exc_info=True)
+            return err_msg
 
     def ai_perform_actions(self):
         unit_name = self.active_unit["name"]
@@ -2554,6 +2787,7 @@ class GameCompanion:
         # Determine AI Settings
         ai_set = self.mission_data.get("ai_settings", {})
         gemini_on = ai_set.get("gemini_enabled", True)
+        camera_on = ai_set.get("camera_enabled", True)
         
         # Interactive Wizard Dialog
         dialog = tk.Toplevel(self.root)
@@ -2596,11 +2830,24 @@ class GameCompanion:
             weapons = self.active_unit.get("weapons", [])
             max_r = max([w["range"][1] for w in weapons]) if weapons else 0
             is_melee_unit = any(w["range"][0] == 0 for w in weapons) and max_r < 3
+            upgrades = self.active_unit.get("upgrades", [])
             
             dist = var_dist.get()
             target = var_target_type.get()
             
             plan = ""
+            equipment_advice = ""
+            
+            # Equipment Scheck
+            if upgrades:
+                for upg in upgrades:
+                    # Einfache Erkennung per String
+                    u_str = str(upg).lower()
+                    if "granat" in u_str or "grenade" in u_str:
+                        equipment_advice += f"\n• Nutze {upg} (wenn Range 1)!"
+                    elif "ziel" in u_str or "scope" in u_str:
+                         equipment_advice += f"\n• Nutze {upg} für besseres Zielen."
+
             if "Nahkampf" in dist: 
                 plan = "⚔️ Status: Im Nahkampf. \n-> Aktion: NAHKAMPF-ANGRIFF ausführen. Ziel auf Zerstörung fokussieren."
                 self.ai_intent = "Melee"
@@ -2618,34 +2865,178 @@ class GameCompanion:
                 # Out of range
                 plan = "🏃 Annäherung.\n-> Aktion: BEWEGUNG -> In Deckung gehen oder 2. Bewegung."
                 self.ai_intent = "Move"
+            
+            if equipment_advice:
+                plan += f"\n\n🎒 AUSRÜSTUNG:{equipment_advice}"
                 
             lbl_recommendation.config(text=plan, fg="black", font=("Segoe UI", 11, "bold"))
-            btn_exec_move.config(state="normal" if "BEWEGUNG" in plan else "disabled")
-            btn_exec_atk.config(state="normal" if "ANGRIFF" in plan else "disabled")
+            
+            # Buttons aktivieren
+            state_move = "normal" if self.ai_intent == "Move" else "disabled"
+            state_attack = "normal" if self.ai_intent in ["Ranged", "Melee"] else "disabled"
+            
+            # "Plan ausführen" Button aktivieren
+            btn_auto.config(state="normal", bg="#4CAF50")
+            
+            # Update specific buttons (Visual feedback)
+            btn_exec_move.config(state=state_move)
+            btn_exec_atk.config(state=state_attack)
 
         def run_gemini_logic():
-            lbl_recommendation.config(text="⏳ Gemini analysiert Foto & Daten...", fg="orange")
+            if not GEMINI_AVAILABLE:
+                return
+
+            lbl_recommendation.config(text="⏳ Gemini analysiert Situation & Daten...", fg="orange")
+            # Disable button (try/except because btn_gemini might not be assigned yet if called too early, but usually fine)
+            try: btn_gemini.config(state="disabled")
+            except: pass
+            
             dialog.update()
             
-            context = f"Ziel: {var_target_type.get()}, Distanz: {var_dist.get()}, In Reichweite: {var_in_range.get()}"
-            advice = self.ask_gemini_decision(self.active_unit, context)
+            # Gather Game State Summary (Main Thread)
+            p_units_alive = len([u for u in self.player_army.get("units", []) if u.get("current_hp", 0) > 0])
+            o_units_alive = len([u for u in self.opponent_army.get("units", []) if u.get("current_hp", 0) > 0])
             
-            lbl_recommendation.config(text=f"🤖 GEMINI SAGT:\n{advice}", fg="purple")
+            game_state = (
+                f"Runde: {self.round_number} (Phase: {self.current_phase})\n"
+                f"Punkte: Player {self.player_score} vs Opponent {self.opponent_score}\n"
+                f"Einheiten verbleibend: Player {p_units_alive}, Opponent {o_units_alive}\n"
+                f"Aktuelle Karte: {self.current_command_card}"
+            )
+
+            context = (
+                f"Manuelle Beobachtung:\n"
+                f"• Ziel-Priorität: {var_target_type.get()}\n"
+                f"• Distanz: {var_dist.get()}\n"
+                f"• Waffenreichweite: {'Ja' if var_in_range.get() else 'Nein'}\n\n"
+                f"-- SPIELVERLAUF / STATUS --\n{game_state}"
+            )
             
-            # Simple intent parsing
-            if "beweg" in advice.lower() or "move" in advice.lower():
-                self.ai_intent = "Move"
-            if "angriff" in advice.lower() or "attack" in advice.lower():
-                self.ai_intent = "Ranged" # Default to attack check
+            # Context Captures
+            unit_ref = self.active_unit
+            cam_flag = camera_on
+            
+            def complete_callback(advice):
+                lbl_recommendation.config(text=f"🤖 GEMINI SAGT:\n{advice}", fg="purple")
+                
+                # Robust Intent Parsing
+                adv_lower = advice.lower()
+                self.ai_intent = [] # Changed to list for multiple actions
+                
+                # 1. Try to extract "PLAN: [...]" text for better accuracy
+                plan_text = adv_lower
+                try:
+                    start_marker = "plan: ["
+                    end_marker = "]"
+                    idx_start = adv_lower.find(start_marker)
+                    if idx_start != -1:
+                        idx_end = adv_lower.find(end_marker, idx_start)
+                        if idx_end != -1:
+                            plan_text = adv_lower[idx_start:idx_end+1]
+                except:
+                    pass
+                
+                # 2. Keyphrase mapping - Find ALL occurrences
+                matches = []
+                keywords = {
+                    "move": "Move", "beweg": "Move",
+                    "melee": "Melee", "nahkampf": "Melee",
+                    "attack": "Ranged", "angriff": "Ranged",
+                    "aim": "Aim", "zielen": "Aim",
+                    "dodge": "Dodge", "ausweich": "Dodge",
+                    "standby": "Standby", "bereit": "Standby"
+                }
+                
+                # Scan through plan_text to find sequences
+                # We want to find *ordered* actions.
+                # Heuristic: split by common separators and analyze chunks
+                # or just finding all keywords and sorting by index
+                
+                found_actions = []
+                for key, intent in keywords.items():
+                    # Find all occurrences of this key
+                    start = 0
+                    while True:
+                        idx = plan_text.find(key, start)
+                        if idx == -1:
+                            break
+                        found_actions.append((idx, intent))
+                        start = idx + 1
+                
+                # Sort by position in text (order of execution)
+                found_actions.sort(key=lambda x: x[0])
+                
+                # Deduplicate loosely (e.g. if "move" appers twice at index 5 and 6 because of "movement", take one)
+                # Currently we map string -> intent.
+                # Clean up:
+                final_intents = []
+                params = []
+                last_idx = -100
+                
+                for idx, intent in found_actions:
+                    # Ignore if too close to previous match (avoid double matching same word like "movement" matching "move" twice if my logic was flawed, purely safety)
+                    if idx - last_idx < 3: 
+                        continue
+                    final_intents.append(intent)
+                    last_idx = idx
+                
+                # Limit to 2 actions (Legion standard)
+                self.ai_intent = final_intents[:2]
+
+                try:
+                    if self.ai_intent:
+                        btn_auto.config(state="normal", bg="#4CAF50")
+                        btn_auto.config(text=f"✅ AUSFÜHREN: {' -> '.join(self.ai_intent)}")
+                    
+                    # Enable buttons based on AI suggestion (generalized)
+                    has_move = "Move" in self.ai_intent
+                    has_attack = "Ranged" in self.ai_intent or "Melee" in self.ai_intent
+                    
+                    state_move = "normal" if has_move else "disabled"
+                    state_attack = "normal" if has_attack else "disabled"
+                    
+                    btn_exec_move.config(state=state_move)
+                    btn_exec_atk.config(state=state_attack)
+                    btn_gemini.config(state="normal")
+                except: 
+                    pass
+
+            def task():
+                try:
+                    advice_result = self.ask_gemini_decision(unit_ref, context, use_camera=cam_flag)
+                except Exception as e:
+                    advice_result = f"Error during AI Request: {e}"
+                
+                # Schedule update on main thread
+                dialog.after(0, lambda: complete_callback(advice_result))
+
+            # Start Background Thread
+            threading.Thread(target=task, daemon=True).start()
 
         btn_local = tk.Button(f_dec, text="⚡ Logik-Analyse", command=run_local_logic, bg="#ddd")
         btn_local.pack(side="left", padx=5)
         
         if gemini_on and GEMINI_AVAILABLE:
-            btn_gemini = tk.Button(f_dec, text="✨ Gemini Fragen (Webcam)", command=run_gemini_logic, bg="#E1BEE7")
+            # Check availability logic more robustly or warn user
+            btn_gemini = tk.Button(f_dec, text="✨ Gemini Fragen (AI)", command=run_gemini_logic, bg="#E1BEE7")
             btn_gemini.pack(side="left", padx=5)
+        elif not GEMINI_AVAILABLE:
+             # Show disabled button with error explanation
+            err_text = "❌ Gemini Error (Click for info)"
             
-        # --- STEP 3: EXECUTE ---
+            def show_import_error():
+                msg = GEMINI_IMPORT_ERROR if GEMINI_IMPORT_ERROR else "Unknown Import Error"
+                messagebox.showerror("Gemini Import Error", f"Gemini Library could not be loaded:\n\n{msg}\n\nPlease install 'google-genai' or 'google-generativeai'.")
+                
+            btn_gemini = tk.Button(f_dec, text=err_text, command=show_import_error, bg="#ffebee")
+            btn_gemini.pack(side="left", padx=5)
+            logging.warning(f"Gemini AI Button disabled: Library not available. Error: {GEMINI_IMPORT_ERROR}")
+        elif not gemini_on:
+            btn_gemini = tk.Button(f_dec, text="❌ Gemini deaktiviert", bg="#ffebee", state="disabled")
+            btn_gemini.pack(side="left", padx=5)
+            logging.info("Gemini AI Button disabled: AI disabled in settings.")
+        
+        # --- EXECUTION ---
         f_exec = tk.Frame(dialog, pady=10)
         f_exec.pack(fill="x", padx=10)
         
@@ -2655,20 +3046,98 @@ class GameCompanion:
             
         def exe_attack():
             dialog.destroy()
-            # Launch attack helper
             is_melee = (self.ai_intent == "Melee")
             self.ai_query_targets(self.active_unit, is_melee=is_melee)
             
+        def exe_auto():
+            # Führt die Aktionen aus, die im ai_intent gespeichert sind
+            # Handle both list and string for backward compatibility
+            intents = self.ai_intent if isinstance(self.ai_intent, list) else [self.ai_intent]
+            
+            # Remove "Hold" dummy
+            intents = [i for i in intents if i != "Hold"]
+            
+            if not intents:
+                messagebox.showinfo("AI", "Keine ausführbaren Aktionen erkannt.")
+                return
+
+            dialog.destroy()
+            self.ai_executing_plan = True # Flag setzen, damit update_actions_ui den Dialog nicht dazwischenfunkt
+            
+            # Execute Actions sequentially chain
+            # We create a recursive function that pops the first intent and sets itself as callback
+            
+            def run_next_intent(remaining_intents):
+                if not remaining_intents:
+                    self.ai_executing_plan = False
+                    self.update_actions_ui()
+                    return
+
+                intent_type = remaining_intents[0]
+                next_list = remaining_intents[1:]
+                
+                # Callback function to run AFTER the current action finishes
+                def on_finish_action():
+                    if next_list:
+                        # Small delay to let UI settle
+                        self.root.after(200, lambda: run_next_intent(next_list))
+                    else:
+                        # Plan finished
+                        self.ai_executing_plan = False
+                        self.update_actions_ui()
+                
+                # IMPORTANT: Only pass on_finish_action if the dialog supports it!
+                # We updated open_move_dialog and open_attack_dialog (via ai_query_targets) to support it.
+                # Simple actions (Aim, Dodge) are instant, so we call on_finish_action immediately.
+
+                if intent_type == "Move":
+                    self.open_move_dialog(callback=on_finish_action)
+                elif intent_type in ["Ranged", "Melee"]:
+                    is_melee = (intent_type == "Melee")
+                    self.ai_query_targets(self.active_unit, is_melee=is_melee, callback=on_finish_action)
+                elif intent_type == "Aim":
+                    self.active_unit["aim"] = self.active_unit.get("aim", 0) + 1
+                    self.update_trees()
+                    messagebox.showinfo("AI Action", f"{unit_name} nimmt sich Zielen (Aim Token).")
+                    self.actions_remaining -= 1
+                    self.update_actions_ui()
+                    on_finish_action()
+                elif intent_type == "Dodge":
+                    self.active_unit["dodge"] = self.active_unit.get("dodge", 0) + 1
+                    self.update_trees()
+                    messagebox.showinfo("AI Action", f"{unit_name} weicht aus (Dodge Token).")
+                    self.actions_remaining -= 1
+                    self.update_actions_ui()
+                    on_finish_action()
+                elif intent_type == "Standby":
+                    self.active_unit["standby"] = True
+                    self.update_trees()
+                    messagebox.showinfo("AI Action", f"{unit_name} geht in Bereitschaft (Standby).")
+                    self.actions_remaining -= 1
+                    self.update_actions_ui()
+                    on_finish_action()
+
+            # Start the chain
+            run_next_intent(intents)
+
         def exe_manual():
             dialog.destroy()
             
-        btn_exec_move = tk.Button(f_exec, text="Bewegung ausführen", command=exe_move, bg="#4CAF50", fg="white", width=20)
-        btn_exec_move.pack(side="left", padx=5)
+        # Neuer Auto-Button
+        btn_auto = tk.Button(f_exec, text="✅ VORSCHLAG AUSFÜHREN", command=exe_auto, bg="#ccc", fg="white", font=("bold"), state="disabled", width=25)
+        btn_auto.pack(side="top", pady=5)
         
-        btn_exec_atk = tk.Button(f_exec, text="Angriff ausführen", command=exe_attack, bg="#F44336", fg="white", width=20)
-        btn_exec_atk.pack(side="left", padx=5)
+        f_btns = tk.Frame(f_exec)
+        f_btns.pack(pady=5)
         
-        tk.Button(f_exec, text="Manuell", command=exe_manual, bg="#9E9E9E", fg="white").pack(side="right", padx=5)
+        btn_exec_move = tk.Button(f_btns, text="Nur Bewegung", command=exe_move, bg="#9E9E9E", fg="white")
+        btn_exec_move.pack(side="left", padx=2)
+        
+        btn_exec_atk = tk.Button(f_btns, text="Nur Angriff", command=exe_attack, bg="#9E9E9E", fg="white")
+        btn_exec_atk.pack(side="left", padx=2)
+        
+        tk.Button(f_btns, text="Abbrechen / Manuell", command=exe_manual, bg="#9E9E9E", fg="white").pack(side="right", padx=5)
+
 
     def find_closest_enemy(self):
         """Findet den nächsten Feind für AI-Bewegung (vereinfacht)"""
@@ -2688,10 +3157,20 @@ class GameCompanion:
         """Findet das beste Fernkampf-Ziel (vereinfacht)"""
         return {"name": "Bestes Ziel", "priority": 75}
 
-    def ai_query_targets(self, unit, is_melee):
+    def ai_query_targets(self, unit, is_melee, callback=None):
         top = tk.Toplevel(self.root)
         top.title("AI Zielerfassung")
         top.geometry("500x600")
+        
+        # Handle Close (X) - Abort AI Plan if running
+        def on_close():
+            top.destroy()
+            if getattr(self, 'ai_executing_plan', False):
+                 logging.info("AI Plan aborted manually during Target Selection.")
+                 self.ai_executing_plan = False
+                 self.update_actions_ui()
+
+        top.protocol("WM_DELETE_WINDOW", on_close)
 
         tk.Label(top, text=f"AI Einheit: {unit['name']}", font=("bold", 12)).pack(pady=10)
 
@@ -2740,13 +3219,16 @@ class GameCompanion:
         def confirm():
             valid_targets = [item["unit"] for item in target_vars if item["var"].get()]
             top.destroy()
-            self.ai_decide_and_attack(valid_targets, best_weapon)
+            self.ai_decide_and_attack(valid_targets, best_weapon, callback=callback)
 
         tk.Button(top, text="Bestätigen", command=confirm, bg="#2196F3", fg="white", font=("bold")).pack(pady=20)
 
-    def ai_decide_and_attack(self, valid_targets, best_weapon):
+    def ai_decide_and_attack(self, valid_targets, best_weapon, callback=None):
         if not valid_targets:
             messagebox.showinfo("AI Info", "Keine Ziele in Reichweite. AI sollte Bewegung oder andere Aktion durchführen.\n\nBitte führe eine passende Aktion für die AI-Einheit durch und klicke dann die entsprechenden Aktions-Buttons.")
+            # Still call callback? Maybe yes to continue chain? 
+            # But "No Target" implies action failed or was skipped.
+            if callback: callback()
             return
 
         # Logic: Pick Lowest HP, then Random
@@ -2758,9 +3240,9 @@ class GameCompanion:
 
         # Open Attack Dialog Pre-filled
         # We need to modify open_attack_dialog to accept params
-        self.open_attack_dialog(pre_target=chosen_target["name"], pre_weapon=best_weapon["name"] if best_weapon else None)
+        self.open_attack_dialog(pre_target=chosen_target["name"], pre_weapon=best_weapon["name"] if best_weapon else None, callback=callback)
 
-    def open_move_dialog(self):
+    def open_move_dialog(self, callback=None):
         top = tk.Toplevel(self.root)
         top.title("Bewegung")
         top.geometry("450x400")
@@ -2781,6 +3263,18 @@ class GameCompanion:
         tk.Radiobutton(top, text="Keine", variable=var_cover_status, value=0).pack()
         tk.Radiobutton(top, text="Leicht", variable=var_cover_status, value=1).pack()
         tk.Radiobutton(top, text="Schwer", variable=var_cover_status, value=2).pack()
+        
+        # Handle Close (X) - Abort AI Plan if running
+        def on_close():
+            top.destroy()
+            if getattr(self, 'ai_executing_plan', False):
+                 logging.info("AI Plan aborted manually during Move.")
+                 # self.ai_executing_plan = False # Keep True? No, we want to reset.
+                 # Actually, if we abort, we just reset flag.
+                 self.ai_executing_plan = False
+                 self.update_actions_ui()
+
+        top.protocol("WM_DELETE_WINDOW", on_close)
 
         def confirm_move():
             final_speed = max_speed
@@ -2831,11 +3325,19 @@ class GameCompanion:
             self.update_actions_ui()
             self.update_trees()
             top.destroy()
+            
+            # Chain next action
+            if callback:
+                self.root.after(100, callback)
+
+            # LOGGING
+            self.log_event(f"Action: Move completed by {unit['name']}. Cover: {['None', 'Light', 'Heavy'][var_cover_status.get()]}, Aim gained: {tac_val}, Dodge gained: {agile_val}")
 
         tk.Button(top, text=f"Bewegung durchführen (Max Speed {max_speed})", command=confirm_move, bg="#4CAF50", fg="white").pack(pady=20)
 
     def end_phase(self):
         self.current_phase = "End"
+        self.log_event(f"--- END PHASE (Round {self.round_number}) ---")
         for widget in self.frame_center.winfo_children(): widget.destroy()
 
         tk.Label(self.frame_center, text=f"Ende Runde {self.round_number}", font=("Segoe UI", 20, "bold")).pack(pady=20)
@@ -2861,6 +3363,10 @@ class GameCompanion:
         log.append("• 1 Niederhalten-Marker von jeder Einheit entfernt.")
         log.append("• Alle Einheiten bereitgemacht.")
         log.append("• Kommandokarten abgelegt.")
+        
+        # LOGGING
+        self.log_event("End Phase Cleanup completed. Tokens removed, units reset.")
+
 
         tk.Label(self.frame_center, text="\n".join(log), bg="#e3f2fd", padx=20, pady=20, justify="left", font=("Segoe UI", 12)).pack(pady=10)
 
@@ -2877,6 +3383,7 @@ class GameCompanion:
         max_rounds = self.mission_data.get('rounds', 6) if self.mission_data else 6
         if self.round_number >= max_rounds:
             tk.Label(self.frame_center, text=f"SPIELENDE (Runde {max_rounds} erreicht)", font=("Segoe UI", 24, "bold"), fg="red").pack(pady=20)
+            self.log_event("GAME OVER - Max rounds reached.")
             tk.Button(self.frame_center, text="Spiel beenden", command=self.root.destroy, bg="#F44336", fg="white").pack()
         else:
             self.round_number += 1
@@ -2989,7 +3496,7 @@ class GameCompanion:
         """Aktualisiere die Punkteanzeige"""
         self.lbl_score.config(text=f"Spieler: {self.player_score} | Gegner: {self.opponent_score}")
 
-    def open_attack_dialog(self, pre_target=None, pre_weapon=None):
+    def open_attack_dialog(self, pre_target=None, pre_weapon=None, callback=None):
         if not self.active_unit: return
 
         # Callback for completion
@@ -2997,11 +3504,25 @@ class GameCompanion:
             self.actions_remaining -= 1
             self.update_actions_ui()
             self.update_trees()
+            
+            # Chain next
+            if callback:
+                self.root.after(100, callback)
 
         # Dialog
         top = tk.Toplevel(self.root)
         top.title("Angriff durchführen")
         top.geometry("600x700")
+
+        # Handle Close (X) - Abort AI Plan
+        def on_close():
+            top.destroy()
+            if getattr(self, 'ai_executing_plan', False):
+                 logging.info("AI Plan aborted manually during Attack.")
+                 self.ai_executing_plan = False
+                 self.update_actions_ui()
+
+        top.protocol("WM_DELETE_WINDOW", on_close)
 
         unit = self.active_unit
 
@@ -3201,6 +3722,13 @@ class GameCompanion:
                     results[roll_legion_atk(color)] += 1
 
             log_text += f"Wurfergebnis: {results}\n"
+            
+            # LOGGING (Battle Log)
+            battle_log_entry = f"Attack Logic: Base Pool {pool} -> Results {results}"
+            # We don't log to file yet, wait effectively until damage calculation finishes or log intermediate?
+            # Let's log initial roll.
+            # But 'self' is the GameCompanion instance? Yes, nested function.
+            # self.log_event(battle_log_entry) # Maybe too spammy? Let's verify final result.
 
             # --- KEYWORD LOGIC ---
 
@@ -3400,8 +3928,9 @@ class GameCompanion:
                     if wounds > 0:
                         remaining_damage = wounds
                         current_hp = target_unit["current_hp"]
+                        old_minis = target_unit.get("minis", 1)  # Store for logging
+                        current_minis = old_minis # Temp
                         max_hp = target_unit["hp"]
-                        current_minis = target_unit.get("minis", 1)
                         
                         # Berechne Figuren-Verluste durch Überschaden
                         figures_lost = 0
@@ -3422,6 +3951,10 @@ class GameCompanion:
                         target_unit["minis"] = current_minis
                         target_unit["current_hp"] = current_hp
                         
+                        # LOGGING DAMAGE
+                        loss_msg = f"Damage: Target '{target_unit['name']}' took {wounds} wounds. Minis: {old_minis} -> {current_minis}."
+                        self.log_event(loss_msg)
+
                         # Punkte berechnen wenn Figuren sterben
                         if figures_lost > 0:
                             # Versuche verschiedene Möglichkeiten für Einheitskosten
@@ -3447,11 +3980,11 @@ class GameCompanion:
                             
                             # Punkte dem Angreifer gutschreiben
                             if unit in self.player_army["units"]:
-                                # Spieler greift an, Opponent erhält Punkte
-                                self.opponent_score = getattr(self, 'opponent_score', 0) + eliminated_points
-                            else:
-                                # Opponent greift an, Spieler erhält Punkte
+                                # Spieler greift an, Spieler erhält Punkte (Korrektur: Punkte gehen an den, der tötet)
                                 self.player_score = getattr(self, 'player_score', 0) + eliminated_points
+                            else:
+                                # Opponent greift an, Opponent erhält Punkte
+                                self.opponent_score = getattr(self, 'opponent_score', 0) + eliminated_points
                             
                             # Aktualisiere Punkteanzeige
                             self.update_score_display()
@@ -3471,6 +4004,8 @@ class GameCompanion:
                         
                     if suppr_val > 0:
                         target_unit["suppression"] = target_unit.get("suppression", 0) + suppr_val
+                        # LOGGING SUPPRESSION
+                        self.log_event(f"Suppression: '{target_unit['name']}' gained {suppr_val}. Total: {target_unit['suppression']}")
 
                     # Remove used Aim markers
                     aim_used = var_aim.get()
@@ -3504,6 +4039,7 @@ class GameCompanion:
                         message += f"\nAusweichen-Marker verbraucht: {dodges_available}"
                     if panic_message:
                         message += f"\n\n🚨 PANIC TEST:\n{panic_message}"
+                        self.log_event(f"Panic Test: '{target_unit['name']}' -> {panic_message}")
                     
                     # Schließe Fenster SOFORT nach dem Anwenden
                     top.destroy()
@@ -3517,6 +4053,7 @@ class GameCompanion:
             else:
                 def close_no_effect():
                     # Consumes action even if missed
+                    self.log_event(f"Attack Result: No effect on '{target_unit['name'] if target_unit else 'Unknown Target'}'.")
                     top.destroy()
                     on_complete()
                 
@@ -3922,6 +4459,9 @@ class GameCompanion:
         # Schaden berechnen
         damage = max(0, hits - blocks)
         
+        # LOGGING MELEE
+        self.log_event(f"Melee: '{attacker_name}' vs '{target_name}'. Attack ({attack_dice} dice) -> {hits} hits. Defense ({defense_dice} dice) -> {blocks} blocks. Damage: {damage}.")
+
         # Schaden anwenden
         if damage > 0:
             self.apply_figure_damage(target_unit, damage)
@@ -3936,6 +4476,7 @@ class GameCompanion:
             
             if counter_damage > 0:
                 self.apply_figure_damage(attacker, counter_damage)
+                self.log_event(f"Melee Counter-Attack: '{target_name}' deals {counter_damage} damage back to '{attacker_name}'.")
         
         # Ergebnis anzeigen
         result_text = f"Nahkampf: {attacker_name} vs {target_name}\n\n"
@@ -3957,9 +4498,21 @@ class GameCompanion:
         # self.update_center()  # Entfernt da Methode nicht existiert
 
 if __name__ == "__main__":
+    try:
+        root = tk.Tk()
+        # Set icon for standalone run
+        try:
+            icon_img = Image.open("../bilder/SW_legion_logo.png")
+            icon_photo = ImageTk.PhotoImage(icon_img)
+            root.iconphoto(True, icon_photo)
+        except:
+            pass
+            
+        app = GameCompanion(root)
+        root.mainloop()
+    except Exception as e:
+        logging.critical(f"Unhandled exception in main: {e}", exc_info=True)
 
-        btn_roll = tk.Button(top, text="WÜRFELN", command=roll_attack, font=("Segoe UI", 12, "bold"), bg="#2196F3", fg="white")
-        btn_roll.pack(pady=10)
 
 
 if __name__ == "__main__":

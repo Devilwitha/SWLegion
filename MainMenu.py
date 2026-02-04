@@ -15,7 +15,7 @@ else:
     # Running as Python script  
     from utilities import LegionUtils
 
-pversion = "1.4v"
+pversion = "2.0v"
 rversion = "2.5v"
 
 class MainMenu:
@@ -165,8 +165,6 @@ class MainMenu:
             logging.error(error_msg, exc_info=True)
             messagebox.showerror("Fehler", f"Konnte {script_name} nicht starten:\n\n{str(e)}\n\nSiehe Log für Details.")
 
-    def try_direct_import(self, script_name):
-        """Try to import and run modules directly. Returns True if successful, False otherwise."""
     def try_direct_import(self, script_name):
         """Try to import and run modules directly. Returns True if successful, False otherwise."""
         try:
@@ -381,6 +379,10 @@ class MainMenu:
         howto_content = """
 Star Wars Legion Tool Suite - Anleitung
 
+=== NEU: MUSIK & LOGGING ===
+• 🎵 Musik Player: Eigene Soundtracks für die Schlacht (im Hauptmenü)
+• 💾 Battle Log: Automatische Speicherung aller Ereignisse im 'log'-Ordner
+
 === EMPFOHLENE REIHENFOLGE ===
 
 1. CUSTOM FACTORY
@@ -401,10 +403,10 @@ Star Wars Legion Tool Suite - Anleitung
    • Speichere deine Mission für das Spiel
 
 4. SPIEL-BEGLEITER (GAME COMPANION)
-   • Lade deine erstellte Mission
-   • Importiere deine Armeen
-   • Nutze den Kampf-Simulator und AI-Gegner
-   • Verfolge Rundenabläufe und Spielzustand
+   • Lade deine erstellte Mission & Importiere deine Armeen
+   • 🤖 AI-Gegner: "Vorschlag ausführen" lässt die AI komplexe Züge (z.B. Bewegen -> Angreifen) automatisch durchführen
+   • ⚔️ Kampf-Simulator: Würfel-Engine mit automatischer Schadensberechnung, Deckung & Token-Management
+   • 📝 Live-Log: Verfolge jeden Würfelwurf und jede Aktion im automatischen Battle-Log
 
 === DETAILLIERTE MODULE-BESCHREIBUNG ===
 
@@ -428,9 +430,9 @@ MISSION GENERATOR:
 
 GAME COMPANION:
 • Rundenmanagement: Automatische Phasen-Verfolgung
-• Kampf-Simulator: Würfel-Engine mit automatischer Schadensberechnung
-• AI-Gegner: Intelligent handelnde Computer-Gegner
-• Zustandsverfolgung: HP, Marker, Aktivierungen
+• AI-Integration: Gemini analysiert das Schlachtfeld und schlägt taktische Züge vor
+• Automatisierung: AI führt Befehle (Bewegen, Angreifen, Zielen) selbstständig aus
+• Zustandsverfolgung: HP, Marker, Aktivierungen werden automatisch verwaltet
 
 === TIPPS ===
 
@@ -444,7 +446,20 @@ GAME COMPANION:
 • Python 3.8+
 • PIL (Pillow) für Bildverarbeitung
 • tkinter (meist standardmäßig installiert)
-• Optional: requests für AI-Generierung
+• Optional: google-genai für AI-Funktionen
+
+=== AI SETUP (GEMINI) ===
+
+• Um die AI zu nutzen, wird ein Google Gemini API Key benötigt.
+• Erstelle eine Datei 'gemini_key.txt' im Hauptordner.
+• Kopiere deinen API Key in diese Datei (einfach nur den Key, keine Leerzeichen).
+• Ohne Key funktioniert der Game Companion nur im manuellen Modus.
+
+=== PROBLEMLÖSUNG ===
+
+• "Startet nicht": Überprüfe ob 'google-genai' im venv installiert ist (pip install -r requirements.txt).
+• "Keine Musik": Stelle sicher, dass der 'musik'-Ordner .mp3 oder .wav Dateien enthält.
+• "Log nicht erstellt": Der Ordner 'log' wird automatisch erstellt, benötigt aber Schreibrechte.
 """
         
         text_widget.insert("1.0", howto_content)

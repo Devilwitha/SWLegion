@@ -10,3 +10,6 @@ gemini_key.txt
 /dist/SWLegion
 legion_app.log
 *.mp3
+/log
+build/Win/Missions/11.json
+/build/Win/log

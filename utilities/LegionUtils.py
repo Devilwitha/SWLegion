@@ -114,7 +114,7 @@ def setup_logging(log_file="legion_app.log"):
 
     # Console Handler - only show INFO and above on console
     console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(logging.INFO)
+    console_handler.setLevel(logging.DEBUG) # Changed to DEBUG for verbose output as requested
     console_handler.setFormatter(formatter)
     logger.addHandler(console_handler)
 
