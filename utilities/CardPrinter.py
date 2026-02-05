@@ -226,15 +226,50 @@ class CardPrinter:
             draw.text((40, 30), cat.upper(), font=font_small, fill="white")
             draw.text((40, 60), data.get("name", ""), font=font_title, fill="white")
 
-            # Main Text
-            draw.rectangle([100, 200, W-100, H-100], fill=(255, 255, 255, 200), outline=col, width=5)
+            # Main Content
+            if data.get("map_file") and os.path.exists(data["map_file"]):
+                # Draw Map Layout
+                map_x, map_y = 100, 150
+                map_w, map_h = W - 200, H - 250
+                
+                # Draw Field Background
+                draw.rectangle([map_x, map_y, map_x+map_w, map_y+map_h], fill="#e1f5fe", outline=col, width=5)
+                
+                try:
+                    with open(data["map_file"], "r") as f:
+                        zones = json.load(f)
+                    
+                    # Original map creator was 600x300.
+                    scale_x = map_w / 600.0 
+                    scale_y = map_h / 300.0
 
-            import textwrap
-            lines = textwrap.wrap(data.get("text", ""), width=50)
-            ty = 250
-            for line in lines:
-                draw.text((120, ty), line, font=font_text, fill="black")
-                ty += 40
+                    for z in zones:
+                        c = z["color"]
+                        coords = z["coords"]
+                        
+                        # Coords are x0, y0, x1, y1 relative to origin
+                        x0 = map_x + coords[0] * scale_x
+                        y0 = map_y + coords[1] * scale_y
+                        x1 = map_x + coords[2] * scale_x
+                        y1 = map_y + coords[3] * scale_y
+                        
+                        fill = "#ffcdd2" if c == "red" else "#bbdefb"
+                        outline = "red" if c == "red" else "blue"
+                        draw.rectangle([x0, y0, x1, y1], fill=fill, outline=outline)
+                        
+                except Exception as e:
+                    draw.text((map_x+10, map_y+10), f"Error loading map: {e}", fill="red", font=font_small)
+
+            else:
+                # Text Box
+                draw.rectangle([100, 200, W-100, H-100], fill=(255, 255, 255, 200), outline=col, width=5)
+
+                import textwrap
+                lines = textwrap.wrap(data.get("text", ""), width=50)
+                ty = 250
+                for line in lines:
+                    draw.text((120, ty), line, font=font_text, fill="black")
+                    ty += 40
 
 
         else: # Command Card

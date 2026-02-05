@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog, simpledialog
+from PIL import Image, ImageTk
 import json
 import random
 import os
@@ -1109,6 +1110,26 @@ class GameCompanion:
             
             text_widget.insert(tk.END, '\n')
 
+    def parse_battlefield_info(self, text):
+        if not text: return ""
+        lines = text.split('\n')
+        extracted = []
+        capture = False
+        
+        for line in lines:
+            line_lower = line.lower()
+            if "schlachtfeld" in line_lower and ("2." in line or "**" in line):
+                 capture = True
+                 extracted.append(line.replace("**", ""))
+                 continue
+            
+            if capture:
+                if line.strip().startswith(("3.", "**3.", "###")):
+                    break
+                extracted.append(line.replace("**", ""))
+        
+        return "\n".join(extracted).strip()
+
     def start_setup_phase(self):
         self.current_phase = "Setup"
         tk.Label(self.frame_center, text="Phase: Spielvorbereitung", font=("Segoe UI", 20, "bold"), bg="#fafafa").pack(pady=20)
@@ -1127,8 +1148,38 @@ class GameCompanion:
                    f"GEGNER (ROT): {m.get('red_faction', '-')}")
             tk.Label(info_frame, text=txt, font=("Consolas", 10), justify="left", bg="#e1f5fe").pack()
 
-            if m.get("scenario_text"):
-                tk.Button(info_frame, text="Vollständiges Szenario lesen", command=self.show_scenario_popup, bg="#FFC107").pack(anchor="e", pady=5)
+            # --- Battlefield & Map Display ---
+            scenario_text = m.get("scenario_text", "")
+            battlefield_info = self.parse_battlefield_info(scenario_text)
+            map_path = m.get("map_image")
+            
+            bf_frame = tk.LabelFrame(info_frame, text="Schlachtfeld & Aufstellung", bg="#e1f5fe", font=("Segoe UI", 10, "bold"))
+            bf_frame.pack(fill="x", pady=10, padx=5)
+
+            map_shown = False
+            if map_path and os.path.exists(map_path):
+                try:
+                    load = Image.open(map_path)
+                    # Resize to fit reasonably
+                    base_width = 580
+                    w_percent = (base_width / float(load.size[0]))
+                    h_size = int((float(load.size[1]) * float(w_percent)))
+                    load = load.resize((base_width, h_size), Image.Resampling.LANCZOS)
+                    
+                    render = ImageTk.PhotoImage(load)
+                    img = tk.Label(bf_frame, image=render, bg="#e1f5fe")
+                    img.image = render
+                    img.pack(pady=5, anchor="center")
+                    map_shown = True
+                except Exception as e:
+                    logging.error(f"Could not load map image: {e}")
+
+            if not map_shown and battlefield_info:
+                 tk.Label(bf_frame, text=battlefield_info, justify="left", wraplength=600, bg="#e1f5fe", font=("Segoe UI", 9)).pack(anchor="w", padx=5, pady=5)
+
+
+            if scenario_text:
+                tk.Button(info_frame, text="Vollständiges Szenario / Details lesen", command=self.show_scenario_popup, bg="#FFC107").pack(anchor="e", pady=5)
         else:
             tk.Label(info_frame, text="Keine Mission geladen.\nNutze 'LADE MISSION' oben.", font=("italic"), bg="#e1f5fe").pack()
             tk.Button(info_frame, text="Mission laden", command=self.load_mission, bg="#2196F3", fg="white").pack(pady=5)

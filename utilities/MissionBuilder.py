@@ -8,20 +8,20 @@ import subprocess
 
 # Import LegionDatabase with compatibility for both script and package modes
 try:
-    # Try relative imports first (when imported as part of utilities package)
     from .LegionData import LegionDatabase
     from .LegionUtils import get_writable_path, get_gemini_key
+    from .MapRenderer import MapRenderer
 except ImportError:
     try:
-        # Try package imports (when running with MainMenu)
         from utilities.LegionData import LegionDatabase
         from utilities.LegionUtils import get_writable_path, get_gemini_key
+        from utilities.MapRenderer import MapRenderer
     except ImportError:
-        # Fallback to absolute imports (when running as standalone script)
         from LegionData import LegionDatabase
         from LegionUtils import get_writable_path, get_gemini_key
+        from MapRenderer import MapRenderer
 
-from PIL import Image, ImageTk
+from PIL import Image, ImageTk, ImageDraw, ImageFont
 
 try:
     import requests
@@ -393,11 +393,50 @@ class LegionMissionGenerator:
             
             text_widget.insert(tk.END, '\n')
 
+    def generate_map_image(self):
+        """Generates a PIL Image of the current map for saving using MapRenderer"""
+        try:
+            # Generate Base Map
+            img = MapRenderer.draw_map(self.combo_deploy.get(), db=self.db)
+            
+            # Add Overlays
+            img = MapRenderer.draw_overlays(
+                img, 
+                self.combo_mission.get(), 
+                self.combo_blue.get(), 
+                self.combo_red.get()
+            )
+
+            # Ensure directory exists
+            map_dir = "images/maps"
+            if not os.path.exists(map_dir):
+                os.makedirs(map_dir, exist_ok=True)
+                
+            # Save file
+            import uuid
+            filename = f"{uuid.uuid4()}.png"
+            filepath = os.path.abspath(os.path.join(map_dir, filename))
+            img.save(filepath)
+            return filepath
+            
+        except Exception as e:
+            logging.error(f"Failed to generate map image with MapRenderer: {e}")
+            return ""
+
     def save_mission(self):
         logging.info("Attempting to save mission...")
+        
+        # Generate Map Image
+        try:
+            map_image_path = self.generate_map_image()
+        except Exception as e:
+            logging.error(f"Failed to generate map image: {e}")
+            map_image_path = ""
+
         # Gather data
         data = {
             "deployment": self.combo_deploy.get(),
+            "map_image": map_image_path,
             "mission_type": self.combo_mission.get(),
             "blue_faction": self.combo_blue.get(),
             "red_faction": self.combo_red.get(),

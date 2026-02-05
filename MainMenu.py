@@ -23,7 +23,7 @@ class MainMenu:
         LegionUtils.setup_logging()
         self.root = root
         self.root.title("Star Wars Legion: All-in-One Tool  {pversion} (Rules {rversion})".format(pversion=pversion, rversion=rversion))
-        self.root.geometry("400x700")
+        self.root.geometry("400x750")
         
         # Set window icon
         try:

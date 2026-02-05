@@ -36,7 +36,6 @@ a = Analysis(
         'google.auth',
         'threading',
         'cv2',
-    ],
         'uuid',
         'requests',
         'os',
