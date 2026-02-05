@@ -8,14 +8,17 @@ import sys
 from pathlib import Path
 from datetime import datetime
 
-# Import Settings Manager
+# Import Settings Manager & Utils
 try:
     from .MusicSettingsManager import MusicSettingsManager
+    from .LegionUtils import get_writable_path
 except ImportError:
     try:
         from utilities.MusicSettingsManager import MusicSettingsManager
+        from utilities.LegionUtils import get_writable_path
     except ImportError:
         from MusicSettingsManager import MusicSettingsManager
+        from LegionUtils import get_writable_path
 
 class MusicPlayer:
     def __init__(self, root, start_with_playlist=None):
@@ -42,35 +45,27 @@ class MusicPlayer:
         self.music_settings = MusicSettingsManager()
         self.settings = self.music_settings.load_settings()
         
-        # Directories - finde das Projekt-Hauptverzeichnis oder EXE-Verzeichnis
+        # Directories resolution
         if getattr(sys, 'frozen', False):
-            # Läuft als PyInstaller EXE
-            base_path = sys._MEIPASS  # PyInstaller temp directory mit entpackten Dateien
-            exe_dir = os.path.dirname(sys.executable)  # Verzeichnis der EXE für beschreibbare Dateien
-            
-            # Musik aus _MEIPASS (read-only), Playlists neben EXE (beschreibbar)
-            self.music_dir = os.path.join(base_path, "musik")
-            self.playlist_dir = os.path.join(exe_dir, "playlist")
-            
-            print(f"EXE-Modus: base_path={base_path}, exe_dir={exe_dir}")
+            # Running as PyInstaller executable
+            self.base_source_dir = sys._MEIPASS
         else:
-            # Läuft als Python Script
-            current_dir = os.path.dirname(os.path.abspath(__file__))
-            project_dir = os.path.dirname(current_dir)  # Gehe ein Verzeichnis hoch von utilities
-            self.music_dir = os.path.join(project_dir, "musik")
-            self.playlist_dir = os.path.join(project_dir, "playlist")
-            print(f"Script-Modus: project_dir={project_dir}")
+            # Running as Python script
+            self.base_source_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            
+        # Determine writable paths for data
+        self.music_dir = get_writable_path("musik")
+        self.playlist_dir = get_writable_path("playlist")
         
         print(f"Musik-Verzeichnis: {self.music_dir}")
         print(f"Playlist-Verzeichnis: {self.playlist_dir}")
         
-        # Ensure directories exist
+        # Ensure directories exist (get_writable_path typically creates them, but to be sure)
         os.makedirs(self.music_dir, exist_ok=True)
         os.makedirs(self.playlist_dir, exist_ok=True)
         
-        # Wenn EXE-Modus, kopiere Beispielmusik und Playlists beim ersten Start
-        if getattr(sys, 'frozen', False):
-            self.copy_initial_files()
+        # Initial setup: check and copy default files if needed
+        self.copy_initial_files()
         
         self.setup_ui()
         self.load_music_files()
@@ -81,41 +76,30 @@ class MusicPlayer:
             self.load_playlist(self.start_with_playlist, auto_start=True)
         
     def copy_initial_files(self):
-        """Kopiert initiale Dateien aus _MEIPASS zu beschreibbaren Verzeichnissen"""
+        """Kopiert initiale Dateien aus der Quelle in die Benutzerverzeichnisse"""
         try:
-            exe_dir = os.path.dirname(sys.executable)
-            user_music_dir = os.path.join(exe_dir, "musik")
+            import shutil
             
-            # Stelle sicher dass user musik verzeichnis existiert
-            os.makedirs(user_music_dir, exist_ok=True)
-            
-            # Kopiere Musik-Dateien aus _MEIPASS wenn user-Verzeichnis leer ist
-            base_music_dir = os.path.join(sys._MEIPASS, "musik")
-            if os.path.exists(base_music_dir) and len(os.listdir(user_music_dir)) <= 1:  # Nur README.md
-                import shutil
-                for file_name in os.listdir(base_music_dir):
-                    if file_name.lower().endswith(('.mp3', '.wav', '.ogg', '.m4a')):
-                        src = os.path.join(base_music_dir, file_name)
-                        dst = os.path.join(user_music_dir, file_name)
-                        if not os.path.exists(dst):  # Überschreibe nicht vorhandene Dateien
-                            shutil.copy2(src, dst)
-                            print(f"MP3 kopiert: {file_name}")
-            
-            # Kopiere playlist-Beispiele wenn noch keine existieren
-            base_playlist_dir = os.path.join(sys._MEIPASS, "playlist")
-            if os.path.exists(base_playlist_dir) and not os.listdir(self.playlist_dir):
-                import shutil
-                for file_name in os.listdir(base_playlist_dir):
-                    if file_name.endswith('.json'):
-                        src = os.path.join(base_playlist_dir, file_name)
-                        dst = os.path.join(self.playlist_dir, file_name)
-                        shutil.copy2(src, dst)
-                        print(f"Playlist kopiert: {file_name}")
-                        
-            # Aktualisiere musik_dir für Benutzer-Dateien
-            self.music_dir = user_music_dir
-            print(f"Benutzer-Musik-Verzeichnis: {self.music_dir}")
-            
+            # 1. Musik kopieren
+            src_music = os.path.join(self.base_source_dir, "musik")
+            if os.path.exists(src_music):
+                # Check if user dir is empty or nearly empty
+                if len(os.listdir(self.music_dir)) <= 1: 
+                    for f in os.listdir(src_music):
+                        if f.lower().endswith(('.mp3', '.wav', '.ogg', '.m4a', '.md')):
+                            shutil.copy2(os.path.join(src_music, f), os.path.join(self.music_dir, f))
+                            print(f"[Init] Musik kopiert: {f}")
+
+            # 2. Playlists kopieren
+            src_playlist = os.path.join(self.base_source_dir, "playlist")
+            if os.path.exists(src_playlist):
+                # Check if user playlist dir is empty
+                if not os.listdir(self.playlist_dir):
+                    for f in os.listdir(src_playlist):
+                        if f.lower().endswith('.json') or f.lower().endswith('.md'):
+                            shutil.copy2(os.path.join(src_playlist, f), os.path.join(self.playlist_dir, f))
+                            print(f"[Init] Playlist kopiert: {f}")
+                            
         except Exception as e:
             print(f"Fehler beim Kopieren initialer Dateien: {e}")
         
