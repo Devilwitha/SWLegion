@@ -11,7 +11,7 @@ Dieses Projekt bietet eine Sammlung von digitalen Werkzeugen für das Tabletop-S
 **Code by:** BolliSoft (Nico Bollhalder)  
 **Programm Version:** 1.1v  
 **Regelwerk:** 2.5v  
-**Github:** https://github.com/Devilwitha/SWLegion
+**Github:** https://github.com/Devilwitha/SWLegion  
 **Neue Features:** Automatische CI/CD, Windows Installer, AI-Integration, Visual Marker System
 
 ## 🔽 Download & Installation
@@ -37,9 +37,8 @@ Jeder GitHub Commit erstellt automatisch neue Releases mit beiden Installationso
 *   Python 3.8+ muss installiert sein
 *   Die folgenden Python-Pakete:
     ```bash
-    pip install pillow requests
+    pip install -r requirements.txt
     ```
-*   `tkinter` (standardmäßig in Python enthalten)
 
 ### Installation & Start
 1.  Klone das Repository oder lade alle Dateien herunter
