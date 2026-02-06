@@ -185,11 +185,17 @@ class BattlefieldMapCreator:
                 items = json.load(file)
 
             for i in items:
-                if i["type"] == "rectangle":
+                # Handle both dict format and potential string format
+                if not isinstance(i, dict):
+                    logging.warning(f"Skipping invalid item in map file: {i}")
+                    continue
+                    
+                item_type = i.get("type", "")
+                if item_type == "rectangle":
                     self.canvas.create_rectangle(*i["coords"], fill=i["color"], outline="black", tags="shape")
-                elif i["type"] == "oval":
+                elif item_type == "oval":
                     self.canvas.create_oval(*i["coords"], fill=i["color"], outline="black", tags="shape")
-                elif i["type"] == "text":
+                elif item_type == "text":
                     self.canvas.create_text(*i["coords"], text=i["text"], font=("Arial", 12, "bold"), tags="shape")
 
     def export_image(self):

@@ -135,9 +135,17 @@ class LegionMissionGenerator:
 
         for gelaende in self.gelaende_typen:
             var = tk.BooleanVar()
-            chk = tk.Checkbutton(frame_terrain, text=gelaende, variable=var, anchor="w")
+            chk = tk.Checkbutton(frame_terrain, text=gelaende, variable=var, anchor="w", command=self.update_terrain_options)
             chk.pack(fill="x", padx=5)
             self.var_gelaende[gelaende] = var
+
+        # Sarlacc Pit Option (nur bei Wüste sichtbar)
+        self.frame_sarlacc = tk.Frame(frame_terrain)
+        self.var_sarlacc_pit = tk.BooleanVar()
+        self.chk_sarlacc = tk.Checkbutton(self.frame_sarlacc, text="🕳️ Sarlacc Pit vorhanden", variable=self.var_sarlacc_pit, anchor="w", fg="#8B4513")
+        self.chk_sarlacc.pack(fill="x", padx=20)
+        # Zunächst versteckt
+        self.frame_sarlacc.pack_forget()
 
         # 3. PUNKTE
         lbl_punkte = tk.Label(frame_settings, text="3. Punktezahl:", font=("Arial", 11, "bold"))
@@ -265,7 +273,8 @@ class LegionMissionGenerator:
         btn_frame = tk.Frame(frame_map, bg="#eee")
         btn_frame.pack(pady=20)
 
-        tk.Button(btn_frame, text="💾 Mission Speichern", command=self.save_mission, bg="#4CAF50", fg="white", font=("bold", 12)).pack(side=tk.LEFT, padx=10)
+        tk.Button(btn_frame, text="� Mission Laden", command=self.load_mission, bg="#FF9800", fg="white", font=("bold", 12)).pack(side=tk.LEFT, padx=10)
+        tk.Button(btn_frame, text="�💾 Mission Speichern", command=self.save_mission, bg="#4CAF50", fg="white", font=("bold", 12)).pack(side=tk.LEFT, padx=10)
         tk.Button(btn_frame, text="🎮 Spiel starten", command=self.start_game, bg="#2196F3", fg="white", font=("bold", 12)).pack(side=tk.LEFT, padx=10)
         tk.Button(btn_frame, text="✏ Schlachtfeld-Planer öffnen", command=self.launch_map_creator, bg="#9C27B0", fg="white", font=("bold", 12)).pack(side=tk.LEFT, padx=10)
 
@@ -339,6 +348,15 @@ class LegionMissionGenerator:
             elif not self.combo_red.get(): self.combo_red.current(0)
 
         self.update_map()
+
+    def update_terrain_options(self):
+        """Zeigt/versteckt Sarlacc Pit Option basierend auf Wüste-Auswahl."""
+        wueste_key = "Wüste (z.B. Tatooine, Geonosis)"
+        if wueste_key in self.var_gelaende and self.var_gelaende[wueste_key].get():
+            self.frame_sarlacc.pack(fill="x", padx=5)
+        else:
+            self.frame_sarlacc.pack_forget()
+            self.var_sarlacc_pit.set(False)  # Reset wenn Wüste abgewählt
 
     def load_api_key(self):
         # Try to load from file
@@ -423,6 +441,121 @@ class LegionMissionGenerator:
             logging.error(f"Failed to generate map image with MapRenderer: {e}")
             return ""
 
+    def load_mission(self):
+        """Lädt eine gespeicherte Mission und füllt alle Felder aus."""
+        try:
+            initial_dir = get_writable_path("Missions")
+            file_path = filedialog.askopenfilename(
+                initialdir=initial_dir,
+                title="Mission laden",
+                filetypes=[("JSON", "*.json")]
+            )
+            
+            if not file_path:
+                return
+                
+            with open(file_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            
+            logging.info(f"Loading mission from {file_path}")
+            
+            # 1. Fraktionen-Checkboxen zurücksetzen und setzen
+            for var in self.var_fraktionen.values():
+                var.set(False)
+            
+            # Fraktionen aus blue/red_faction ermitteln
+            factions_to_select = set()
+            if data.get("blue_faction"):
+                factions_to_select.add(data["blue_faction"])
+            if data.get("red_faction"):
+                factions_to_select.add(data["red_faction"])
+            
+            for faction in factions_to_select:
+                if faction in self.var_fraktionen:
+                    self.var_fraktionen[faction].set(True)
+            
+            # Faction Combos aktualisieren
+            self.update_faction_combos()
+            
+            # Blue/Red Faction setzen
+            if data.get("blue_faction"):
+                self.combo_blue.set(data["blue_faction"])
+            if data.get("red_faction"):
+                self.combo_red.set(data["red_faction"])
+            
+            # 2. Gelände-Checkboxen zurücksetzen und setzen
+            for var in self.var_gelaende.values():
+                var.set(False)
+            
+            terrain_list = data.get("terrain", [])
+            for terrain in terrain_list:
+                if terrain in self.var_gelaende:
+                    self.var_gelaende[terrain].set(True)
+            
+            # Terrain-Optionen aktualisieren (Sarlacc Pit anzeigen falls Wüste)
+            self.update_terrain_options()
+            
+            # 3. Sarlacc Pit setzen
+            if hasattr(self, 'var_sarlacc_pit'):
+                self.var_sarlacc_pit.set(data.get("sarlacc_pit", False))
+            
+            # 4. Punkte und Runden
+            self.entry_punkte.delete(0, tk.END)
+            self.entry_punkte.insert(0, str(data.get("points", "800")))
+            
+            self.entry_runden.delete(0, tk.END)
+            self.entry_runden.insert(0, str(data.get("rounds", 6)))
+            
+            # 5. Deployment und Mission Type
+            deployment = data.get("deployment", "")
+            if deployment:
+                try:
+                    self.combo_deploy.set(deployment)
+                except:
+                    pass
+            
+            mission_type = data.get("mission_type", "")
+            if mission_type:
+                try:
+                    self.combo_mission.set(mission_type)
+                except:
+                    pass
+            
+            # 6. Szenario-Text laden
+            scenario_text = data.get("scenario_text", "") or data.get("prompt_text", "")
+            self.current_scenario_text = scenario_text
+            if hasattr(self, 'txt_output'):
+                self.txt_output.delete("1.0", tk.END)
+                if scenario_text:
+                    self.txt_output.insert("1.0", scenario_text)
+            
+            # 7. AI-Settings
+            ai_settings = data.get("ai_settings", {})
+            if hasattr(self, 'var_gemini_enabled'):
+                self.var_gemini_enabled.set(ai_settings.get("gemini_enabled", False))
+            if hasattr(self, 'var_camera_upload'):
+                self.var_camera_upload.set(ai_settings.get("camera_enabled", False))
+            
+            # 8. Musik-Settings
+            music_settings = data.get("music", {})
+            if hasattr(self, 'music_enabled_var'):
+                self.music_enabled_var.set(music_settings.get("enabled", False))
+            if hasattr(self, 'combo_playlist') and music_settings.get("playlist"):
+                try:
+                    self.combo_playlist.set(music_settings["playlist"])
+                except:
+                    pass
+            
+            # Karte aktualisieren
+            self.update_map()
+            
+            logging.info("Mission loaded successfully.")
+            messagebox.showinfo("Geladen", f"Mission geladen:\n{os.path.basename(file_path)}")
+            
+        except Exception as e:
+            logging.error(f"Error loading mission: {e}", exc_info=True)
+            messagebox.showerror("Fehler", f"Fehler beim Laden der Mission:\n{e}")
+
     def save_mission(self):
         logging.info("Attempting to save mission...")
         
@@ -443,6 +576,7 @@ class LegionMissionGenerator:
             "points": self.entry_punkte.get(),
             "rounds": int(self.entry_runden.get()) if self.entry_runden.get().isdigit() else 6,
             "terrain": [k for k,v in self.var_gelaende.items() if v.get()],
+            "sarlacc_pit": self.var_sarlacc_pit.get() if hasattr(self, 'var_sarlacc_pit') else False,
             "prompt_text": self.txt_output.get("1.0", tk.END),
             "scenario_text": self.current_scenario_text,
             "ai_settings": {
@@ -765,13 +899,18 @@ class LegionMissionGenerator:
         
         str_fraktionen = ", ".join(fraktionen_gewaehlt)
         str_terrain = ", ".join(terrain_gewaehlt) if terrain_gewaehlt else "Zufällig / Keine Präferenz"
+        
+        # Sarlacc Pit Hinweis für Wüste
+        sarlacc_hinweis = ""
+        if hasattr(self, 'var_sarlacc_pit') and self.var_sarlacc_pit.get():
+            sarlacc_hinweis = " **WICHTIG: Ein Sarlacc Pit ist auf dem Schlachtfeld vorhanden!** Erstelle spezielle Regeln für dieses gefährliche Terrain-Element."
 
         prompt = (
             f"Erstelle eine detaillierte und balancierte Mission für Star Wars: Legion.\n\n"
             f"**Rahmenbedingungen:**\n"
             f"- **Punkte:** {punkte} Punkte pro Seite.\n"
             f"- **Beteiligte Fraktionen:** {str_fraktionen}.\n"
-            f"- **Gelände-Setting:** {str_terrain}.\n"
+            f"- **Gelände-Setting:** {str_terrain}.{sarlacc_hinweis}\n"
             f"- **Aufstellung:** {deploy}.\n"
             f"- **Mission/Objektive:** {mission}.\n\n"
             f"**Anforderungen an die Mission:**\n"

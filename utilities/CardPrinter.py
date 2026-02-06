@@ -22,6 +22,11 @@ class CardPrinter:
 
         self.loaded_image = None
         self.preview_image = None # Helper for tkinter
+        
+        # Image position and scale controls
+        self.img_offset_x = 0
+        self.img_offset_y = 0
+        self.img_scale = 100  # Percentage
 
         self.setup_ui()
 
@@ -56,6 +61,27 @@ class CardPrinter:
 
         btn_save = tk.Button(top_frame, text="Als Bild speichern", command=self.save_image, bg="#4CAF50", fg="white", font=("Segoe UI", 9, "bold"))
         btn_save.pack(side=tk.LEFT, padx=5)
+
+        # Image Controls Frame
+        ctrl_frame = tk.Frame(self.root, pady=5, padx=10, bg="#ccc")
+        ctrl_frame.pack(fill=tk.X)
+
+        tk.Label(ctrl_frame, text="Bild-Position X:", bg="#ccc").pack(side=tk.LEFT)
+        self.scale_x = tk.Scale(ctrl_frame, from_=-500, to=500, orient=tk.HORIZONTAL, length=120, command=self.on_image_adjust)
+        self.scale_x.set(0)
+        self.scale_x.pack(side=tk.LEFT, padx=5)
+
+        tk.Label(ctrl_frame, text="Y:", bg="#ccc").pack(side=tk.LEFT)
+        self.scale_y = tk.Scale(ctrl_frame, from_=-500, to=500, orient=tk.HORIZONTAL, length=120, command=self.on_image_adjust)
+        self.scale_y.set(0)
+        self.scale_y.pack(side=tk.LEFT, padx=5)
+
+        tk.Label(ctrl_frame, text="Größe %:", bg="#ccc").pack(side=tk.LEFT, padx=(20, 0))
+        self.scale_size = tk.Scale(ctrl_frame, from_=10, to=300, orient=tk.HORIZONTAL, length=150, command=self.on_image_adjust)
+        self.scale_size.set(100)
+        self.scale_size.pack(side=tk.LEFT, padx=5)
+
+        tk.Button(ctrl_frame, text="Reset", command=self.reset_image_controls).pack(side=tk.LEFT, padx=10)
 
         # Main Area: Canvas
         self.canvas_frame = tk.Frame(self.root, bg="#333")
@@ -137,27 +163,30 @@ class CardPrinter:
             W, H = 750, 1050
 
         base = Image.new("RGBA", (W, H), (255, 255, 255, 255))
-        draw = ImageDraw.Draw(base)
 
         # 1. Background Image
         if self.loaded_image:
-            # Resize logic (cover)
-            img_ratio = self.loaded_image.width / self.loaded_image.height
-            target_ratio = W / H
+            # Apply scale from slider
+            scale_factor = self.img_scale / 100.0
+            
+            # Calculate scaled dimensions
+            scaled_w = int(self.loaded_image.width * scale_factor)
+            scaled_h = int(self.loaded_image.height * scale_factor)
+            
+            # Resize image with scale
+            if scaled_w > 0 and scaled_h > 0:
+                resized = self.loaded_image.resize((scaled_w, scaled_h), Image.LANCZOS)
+                
+                # Calculate position with offset
+                # Center the image first, then apply offset
+                paste_x = (W - scaled_w) // 2 + self.img_offset_x
+                paste_y = (H - scaled_h) // 2 + self.img_offset_y
+                
+                # Paste onto base image directly
+                base.paste(resized, (paste_x, paste_y))
 
-            if img_ratio > target_ratio:
-                # Wider
-                new_h = H
-                new_w = int(H * img_ratio)
-            else:
-                new_w = W
-                new_h = int(W / img_ratio)
-
-            resized = self.loaded_image.resize((new_w, new_h), Image.LANCZOS)
-            # Center crop
-            left = (new_w - W) // 2
-            top = (new_h - H) // 2
-            base.paste(resized.crop((left, top, left + W, top + H)), (0, 0))
+        # Create draw object AFTER background is set
+        draw = ImageDraw.Draw(base)
 
         # 2. Overlays (Semi-transparent panels)
         # Load Fonts (fallback to default if ttf not found)
@@ -305,6 +334,24 @@ class CardPrinter:
         self.canvas.config(width=preview_w, height=preview_h)
         self.canvas.delete("all")
         self.canvas.create_image(0, 0, image=self.preview_image, anchor="nw")
+
+    def on_image_adjust(self, value=None):
+        """Called when image sliders are moved."""
+        self.img_offset_x = self.scale_x.get()
+        self.img_offset_y = self.scale_y.get()
+        self.img_scale = self.scale_size.get()
+        # Re-render with new values
+        self.render_card()
+
+    def reset_image_controls(self):
+        """Reset image position and scale to defaults."""
+        self.scale_x.set(0)
+        self.scale_y.set(0)
+        self.scale_size.set(100)
+        self.img_offset_x = 0
+        self.img_offset_y = 0
+        self.img_scale = 100
+        self.render_card()
 
     def save_image(self):
         if not hasattr(self, "generated_image"): return

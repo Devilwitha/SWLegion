@@ -1,9 +1,9 @@
 {
-  "volume": 10,
-  "current_playlist": "1",
+  "volume": 15,
+  "current_playlist": "S",
   "current_song": null,
-  "current_song_index": 0,
+  "current_song_index": 1,
   "shuffle": true,
   "repeat": false,
-  "last_updated": "2026-02-05 08:49:30.735601"
+  "last_updated": "2026-02-07 00:42:25.717438"
 }

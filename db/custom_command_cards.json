@@ -1,0 +1,17 @@
+[
+    {
+        "name": "FY",
+        "pips": 1,
+        "text": "Fick alle",
+        "factions": [
+            "Galaktisches Imperium",
+            "Rebellenallianz",
+            "Separatistenallianz",
+            "Galaktische Republik",
+            "Schattenkollektiv",
+            "Neutral"
+        ],
+        "id": "316ca7ab-3c73-4a02-ad5a-b429dc48fc45",
+        "is_custom": true
+    }
+]
