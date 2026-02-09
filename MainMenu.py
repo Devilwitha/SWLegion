@@ -15,7 +15,7 @@ else:
     # Running as Python script  
     from utilities import LegionUtils
 
-pversion = "2.72v"
+pversion = "2.73v"
 rversion = "2.5v"
 
 class MainMenu:
