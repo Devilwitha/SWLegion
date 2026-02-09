@@ -12,7 +12,8 @@ class TestLegionRulesExtended(unittest.TestCase):
         """Test specific rule contents."""
         setup = LegionRules.PHASES["setup"]
         self.assertTrue(len(setup["steps"]) > 0)
-        self.assertIn("Armeezusammenstellung", setup["steps"])
+        # Check if any step contains "Armeezusammenstellung"
+        self.assertTrue(any("Armeezusammenstellung" in step for step in setup["steps"]))
 
     def test_action_descriptions(self):
         """Test that actions have descriptions."""

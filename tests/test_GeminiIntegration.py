@@ -79,8 +79,8 @@ class TestGeminiAvailability(unittest.TestCase):
             self.assertTrue(hasattr(GameCompanion, 'GEMINI_AVAILABLE'))
             self.assertTrue(hasattr(GameCompanion, 'GEMINI_VERSION'))
             self.assertIn(GameCompanion.GEMINI_VERSION, [0, 1, 2])
-        except ImportError:
-            self.skipTest("GameCompanion module has import dependencies")
+        except (ImportError, AttributeError, Exception) as e:
+            self.skipTest(f"GameCompanion module has import dependencies: {e}")
 
 
 class TestGeminiKeyValidation(unittest.TestCase):

@@ -4,6 +4,13 @@ import json
 import os
 import logging
 
+# PIL für Bildanzeige
+try:
+    from PIL import Image, ImageTk
+    PIL_AVAILABLE = True
+except ImportError:
+    PIL_AVAILABLE = False
+
 # =============================================================================
 # TEIL 1: DIE DATENBANK (IMPORT)
 # =============================================================================
@@ -47,6 +54,10 @@ class LegionArmyBuilder:
         
         # Text-Display für Details
         self.selected_unit_text = tk.StringVar()
+        
+        # Kartenbild-Anzeige Variablen
+        self.current_card_image = None
+        self.current_card_image_path = None
         
         # Basis-Ordner für Speicherstände erstellen (beschreibbar)
         self.base_dir = get_writable_path("Armeen")
@@ -186,6 +197,24 @@ class LegionArmyBuilder:
         # Initial-Text
         self.txt_unit_details.insert("1.0", "Wähle eine Einheit für Details...")
         self.txt_unit_details.config(state="disabled")
+        
+        # 3b. Kartenbild-Anzeige Frame
+        self.card_image_frame = tk.LabelFrame(left_frame, text="📸 Kartenbild", font=("Segoe UI", 10, "bold"))
+        self.card_image_frame.pack(fill="x", pady=5)
+        
+        # Canvas für Kartenbild
+        self.card_image_canvas = tk.Canvas(self.card_image_frame, bg="#333", height=120, width=200)
+        self.card_image_canvas.pack(pady=5, padx=5)
+        
+        # Placeholder für Kartenbild (wird von show_unit_stats aktualisiert)
+        self.current_card_image = None
+        self.card_image_label = tk.Label(self.card_image_frame, text="Kein Bild verknüpft", fg="gray")
+        self.card_image_label.pack()
+        
+        # Button zum Vergrößern
+        self.btn_enlarge_card = tk.Button(self.card_image_frame, text="🔍 Bild vergrößern", 
+                                          command=self.show_enlarged_card_image, state="disabled")
+        self.btn_enlarge_card.pack(pady=2)
 
         # 4. Hinzufügen Button
         btn_config = tk.Button(left_frame, text="Einheit anpassen & hinzufügen >", bg="#2196F3", fg="white", font=("Segoe UI", 11, "bold"), command=self.open_config_window)
@@ -369,6 +398,7 @@ class LegionArmyBuilder:
             self.txt_unit_details.delete("1.0", "end")
             self.txt_unit_details.insert("1.0", "Wähle eine Einheit für Details...")
             self.txt_unit_details.config(state="disabled")
+            self.clear_card_image()
             return
         
         vals = self.tree_units.item(selected, "values")
@@ -386,6 +416,9 @@ class LegionArmyBuilder:
             self.txt_unit_details.delete("1.0", "end")
             self.txt_unit_details.insert("1.0", detail_text)
             self.txt_unit_details.config(state="disabled")
+            
+            # Kartenbild anzeigen
+            self.display_unit_card_image(unit_data)
 
     def format_unit_details(self, unit_data):
         """Formatiert detaillierte Einheiten-Information für Text-Widget"""
@@ -444,6 +477,108 @@ class LegionArmyBuilder:
             text += f"{unit_data['text']}\n\n"
         
         return text
+
+    def display_unit_card_image(self, unit_data):
+        """Zeigt das verknüpfte Kartenbild einer Einheit an"""
+        if not PIL_AVAILABLE:
+            self.card_image_label.config(text="PIL nicht verfügbar")
+            self.btn_enlarge_card.config(state="disabled")
+            return
+        
+        # Suche nach verknüpftem Bild
+        card_image_path = unit_data.get("card_image")
+        
+        # Auch in custom_units suchen
+        if not card_image_path:
+            unit_id = unit_data.get("id")
+            unit_name = unit_data.get("name")
+            
+            # Prüfe ob Bild existiert basierend auf ID oder Name
+            possible_paths = [
+                f"db/card_images/{unit_id}.png",
+                f"db/card_images/{unit_name}.png",
+                f"db/card_images/{str(unit_name).replace(' ', '_')}.png"
+            ]
+            
+            for path in possible_paths:
+                if os.path.exists(path):
+                    card_image_path = path
+                    break
+        
+        if card_image_path and os.path.exists(card_image_path):
+            try:
+                # Bild laden und für Canvas skalieren
+                img = Image.open(card_image_path)
+                
+                # Skalieren auf Canvas-Größe (max 200x120)
+                img.thumbnail((200, 120), Image.LANCZOS)
+                
+                self.current_card_image = ImageTk.PhotoImage(img)
+                self.current_card_image_path = card_image_path
+                
+                # Canvas aktualisieren
+                self.card_image_canvas.delete("all")
+                self.card_image_canvas.create_image(
+                    100, 60,  # Mitte des Canvas
+                    image=self.current_card_image,
+                    anchor="center"
+                )
+                
+                self.card_image_label.config(text=f"📸 {os.path.basename(card_image_path)}")
+                self.btn_enlarge_card.config(state="normal")
+                
+            except Exception as e:
+                logging.error(f"Fehler beim Laden des Kartenbilds: {e}")
+                self.clear_card_image()
+        else:
+            self.clear_card_image()
+
+    def clear_card_image(self):
+        """Löscht die Kartenbild-Anzeige"""
+        self.card_image_canvas.delete("all")
+        self.current_card_image = None
+        self.current_card_image_path = None
+        self.card_image_label.config(text="Kein Bild verknüpft")
+        self.btn_enlarge_card.config(state="disabled")
+
+    def show_enlarged_card_image(self):
+        """Zeigt das Kartenbild in einem vergrößerten Fenster"""
+        if not PIL_AVAILABLE or not hasattr(self, 'current_card_image_path') or not self.current_card_image_path:
+            return
+        
+        if not os.path.exists(self.current_card_image_path):
+            return
+        
+        try:
+            # Neues Fenster für vergrößertes Bild
+            enlarge_window = tk.Toplevel(self.root)
+            enlarge_window.title("Kartenbild - Vergrößert")
+            enlarge_window.geometry("800x600")
+            enlarge_window.configure(bg="#333")
+            
+            # Bild laden in Originalgröße (max 750x550)
+            img = Image.open(self.current_card_image_path)
+            
+            # Skalieren wenn nötig
+            max_w, max_h = 750, 550
+            if img.width > max_w or img.height > max_h:
+                img.thumbnail((max_w, max_h), Image.LANCZOS)
+            
+            enlarged_img = ImageTk.PhotoImage(img)
+            
+            # Label für Bild
+            lbl_img = tk.Label(enlarge_window, image=enlarged_img, bg="#333")
+            lbl_img.image = enlarged_img  # Referenz halten
+            lbl_img.pack(expand=True, pady=10)
+            
+            # Schließen-Button
+            btn_close = tk.Button(enlarge_window, text="Schließen", command=enlarge_window.destroy,
+                                bg="#f44336", fg="white", font=("Segoe UI", 10))
+            btn_close.pack(pady=10)
+            
+        except Exception as e:
+            logging.error(f"Fehler beim Vergrößern des Kartenbilds: {e}")
+            messagebox.showerror("Fehler", f"Bild konnte nicht geladen werden: {e}")
 
     def create_tooltip(self, widget, text):
         """Erstellt ein Hover-Tooltip für ein Widget im Army Builder"""

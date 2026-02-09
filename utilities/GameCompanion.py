@@ -56,6 +56,7 @@ try:
     from .LegionData import LegionDatabase
     from .LegionRules import LegionRules
     from .LegionUtils import get_writable_path, get_gemini_key
+    from .GameEngine import DiceRoller, CombatResolver, PhaseManager, UnitStateManager, MovementCalculator, AIDecisionMaker, get_game_engine
     logging.info("GameCompanion: Using relative imports")
 except ImportError:
     try:
@@ -63,12 +64,25 @@ except ImportError:
         from utilities.LegionData import LegionDatabase
         from utilities.LegionRules import LegionRules
         from utilities.LegionUtils import get_writable_path, get_gemini_key
+        from utilities.GameEngine import DiceRoller, CombatResolver, PhaseManager, UnitStateManager, MovementCalculator, AIDecisionMaker, get_game_engine
         logging.info("GameCompanion: Using package imports")
     except ImportError:
         # Fallback to absolute imports (when running as standalone script)
         from LegionData import LegionDatabase
         from LegionRules import LegionRules
         from LegionUtils import get_writable_path, get_gemini_key
+        try:
+            from GameEngine import DiceRoller, CombatResolver, PhaseManager, UnitStateManager, MovementCalculator, AIDecisionMaker, get_game_engine
+        except ImportError:
+            # GameEngine nicht verfügbar - Fallback
+            DiceRoller = None
+            CombatResolver = None
+            PhaseManager = None
+            UnitStateManager = None
+            MovementCalculator = None
+            AIDecisionMaker = None
+            get_game_engine = None
+            logging.warning("GameCompanion: GameEngine not available")
         logging.info("GameCompanion: Using absolute imports")
 
 # Try to import MusicPlayer
@@ -95,6 +109,25 @@ class GameCompanion:
         # Tooltip-System initialisieren
         self.tooltip_window = None
         self.current_tooltip_widget = None
+
+        # Game Engine initialisieren (Regel-basierte Mechaniken)
+        if get_game_engine:
+            engine = get_game_engine()
+            self.dice_roller = engine["dice"]
+            self.combat_resolver = engine["combat"]
+            self.phase_manager = engine["phases"]
+            self.unit_state_manager = engine["units"]
+            self.movement_calculator = engine["movement"]
+            self.ai_decision_maker = engine["ai"]
+            logging.info("GameCompanion: GameEngine initialized successfully")
+        else:
+            self.dice_roller = None
+            self.combat_resolver = None
+            self.phase_manager = None
+            self.unit_state_manager = None
+            self.movement_calculator = None
+            self.ai_decision_maker = None
+            logging.warning("GameCompanion: GameEngine not available, using legacy mode")
 
         logging.info("GameCompanion initialized.")
         self.root.title("SW Legion: Game Companion & AI Simulator (v2.0 Rules)")
@@ -144,6 +177,7 @@ class GameCompanion:
         self.order_pool = []
         self.active_unit = None
         self.active_side = None # "Player" oder "Opponent"
+        self.active_unit_card_image = None  # Kartenbild der aktiven Einheit
 
         self.ai_enabled = tk.BooleanVar(value=True)
 
@@ -388,6 +422,27 @@ class GameCompanion:
         tk.Label(header_frame, text=f"Seite: {side_text}", 
                 font=("Arial", 12), fg="white", bg="#2196F3").pack()
         
+        # Kartenbild Frame (wenn verknüpft)
+        card_image_path = self.get_unit_card_image_path(unit)
+        if card_image_path and os.path.exists(card_image_path):
+            try:
+                card_frame = tk.Frame(scrollable_frame, bg="#333", pady=5)
+                card_frame.pack(fill="x", padx=10, pady=5)
+                
+                # Bild laden und skalieren
+                img = Image.open(card_image_path)
+                img.thumbnail((450, 250), Image.LANCZOS)
+                
+                # Referenz speichern um Garbage Collection zu verhindern
+                card_img = ImageTk.PhotoImage(img)
+                
+                lbl_card = tk.Label(card_frame, image=card_img, bg="#333")
+                lbl_card.image = card_img  # Referenz halten!
+                lbl_card.pack(pady=5)
+                
+            except Exception as e:
+                logging.warning(f"Kartenbild konnte nicht geladen werden: {e}")
+        
         # Basis-Stats Frame
         stats_frame = tk.LabelFrame(scrollable_frame, text="📊 Basis-Statistiken", font=("Arial", 12, "bold"))
         stats_frame.pack(fill="x", padx=10, pady=5)
@@ -421,7 +476,7 @@ class GameCompanion:
                         justify="left", wraplength=450).pack(anchor="w", padx=10, pady=2)
         else:
             tk.Label(keywords_frame, text="Keine besonderen Fähigkeiten", 
-                    font=("Arial", 10), style="italic").pack(anchor="w", padx=10, pady=5)
+                    font=("Arial", 10, "italic")).pack(anchor="w", padx=10, pady=5)
         
         # Waffen Frame
         weapons_frame = tk.LabelFrame(scrollable_frame, text="⚔️ Waffen & Angriffe", font=("Arial", 12, "bold"))
@@ -523,39 +578,108 @@ class GameCompanion:
         effects_window.transient(self.root)
         effects_window.grab_set()
 
+    def get_unit_card_image_path(self, unit):
+        """Findet den Pfad zum Kartenbild einer Einheit"""
+        # Direkt verknüpftes Bild
+        card_image_path = unit.get("card_image")
+        if card_image_path and os.path.exists(card_image_path):
+            return card_image_path
+        
+        # Suche nach Bild basierend auf ID oder Name
+        unit_id = unit.get("id")
+        unit_name = unit.get("name")
+        
+        possible_paths = [
+            f"db/card_images/{unit_id}.png" if unit_id else None,
+            f"db/card_images/{unit_name}.png" if unit_name else None,
+            f"db/card_images/{str(unit_name).replace(' ', '_')}.png" if unit_name else None,
+        ]
+        
+        for path in possible_paths:
+            if path and os.path.exists(path):
+                return path
+        
+        return None
+
     def get_keyword_description(self, keyword):
-        """Gibt Beschreibung für bekannte Schlüsselwörter zurück"""
+        """
+        Gibt Beschreibung für Schlüsselwörter zurück.
+        Nutzt LegionRules für offizielle Regelbeschreibungen.
+        """
+        # Versuche zuerst aus LegionRules zu laden
+        if hasattr(self.rules, 'get_keyword'):
+            rule_keyword = self.rules.get_keyword(keyword)
+            if rule_keyword:
+                german_name = rule_keyword.get('german', '')
+                effect = rule_keyword.get('effect', '')
+                timing = rule_keyword.get('timing', '')
+                
+                desc = effect
+                if german_name and german_name != keyword:
+                    desc = f"({german_name}) {effect}"
+                if timing:
+                    desc += f" [Timing: {timing}]"
+                return desc
+        
+        # Fallback: Statische Beschreibungen
         descriptions = {
-            "Armor": "Reduziert Treffer um 1 (außer bei kritischen Treffern)",
-            "Armor X": "Reduziert Treffer um X (außer bei kritischen Treffern)", 
-            "Arsenal X": "Kann bis zu X verschiedene Waffen pro Angriff verwenden",
-            "Charge": "+1 Angriffs-Würfel bei Nahkampf nach Bewegung",
-            "Climbing Gear": "Kann vertikale Oberflächen überqueren",
-            "Danger Sense X": "Kann Deckung ignorieren bis Reichweite X",
-            "Deflect": "Kann Schüsse auf Nahbereich-Ziele umleiten",
-            "Disciplined X": "Entfernt X Unterdrückungs-Token bei Rally",
-            "Duelist": "Angriffs-Würfel können nicht durch Deckung reduziert werden",
-            "Exemplar": "Andere Einheiten im Bereich erhalten +1 Mut",
-            "Expert Climber": "Ignoriert Bewegungsstrafen durch Gelände",
-            "Fast": "Kann 1 kostenlosen Speed-1-Zug nach Aktion ausführen",
-            "Fire Support": "Kann Angriff einer anderen Einheit unterstützen", 
-            "Guardian X": "Kann Deckungsschuss für Einheiten in Reichweite X geben",
-            "Immune: Pierce": "Pierce-Angriffe ignorieren Armor nicht",
-            "Immune: Range 1 Weapons": "Immun gegen Angriffe in Reichweite 1",
-            "Impact X": "Ändert X Treffer in kritische Treffer gegen Fahrzeuge",
-            "Jump X": "Kann über Gelände bis Höhe X springen",
-            "Low Profile": "Kann Deckung für Einheiten hinter sich bieten",
-            "Marksman": "Präzisionsschüsse: Kann Ziele hinter Deckung treffen",
-            "Nimble": "Kann Ausweich-Aktion nach Bewegung durchführen",
-            "Pierce X": "Angriffe ignorieren X Armor",
-            "Precise X": "Kann bis zu X Angriffswürfel neu werfen",
-            "Relentless": "Kann nach Rally sofort einen Speed-1-Zug machen",
-            "Scout X": "Kann nach Aufstellung X Speed-1-Züge machen",
-            "Sharpshooter X": "Reduziert Deckungs-Bonus um X",
-            "Steady": "Kann Zielen-Aktion nach Angriff durchführen",
-            "Tactical X": "Kann X Command-Cards bei Taktikphase ziehen",
-            "Uncanny Luck X": "Kann X Verteidigungswürfel neu werfen",
-            "Weak Point X": "Angriffe gegen Fahrzeuge erhalten Pierce X"
+            "Armor": "Normale Treffer werden zu Blocks. Nur Crits verursachen Schaden.",
+            "Armor X": "Blockiert X Treffer automatisch. Crits umgehen dies.", 
+            "Arsenal X": "Kann bis zu X verschiedene Waffen pro Angriff verwenden.",
+            "Blast": "Ignoriert Deckung komplett.",
+            "Charge": "Nach Bewegung in Nahkampf: Freie Nahkampf-Attacke.",
+            "Climbing Vehicle": "Kann klettern ohne zusätzliche Aktion.",
+            "Coordinate": "Beim Erhalt eines Befehls: Erteile Befehl an befreundete Einheit in R1.",
+            "Cover X": "Behandle Einheit als hätte sie Deckung X.",
+            "Critical X": "Wandle bis zu X Surges in Crits um.",
+            "Danger Sense X": "Wirf +1 Verteidigungswürfel pro Suppression (max X).",
+            "Deflect": "Wenn Dodge ausgegeben: Surge→Block. Angreifer erleidet Wunde pro Surge.",
+            "Detonate X": "Löse X Ladungen in Reichweite aus.",
+            "Disciplined X": "Entfernt X Suppression-Token bei Rally.",
+            "Entourage": "Beim Erteilen von Befehlen: Gefolge-Einheit erhält auch Befehl.",
+            "Fire Support": "Kann Angriff einer anderen Einheit unterstützen.", 
+            "Guardian X": "Übernimm bis zu X Treffer von befreundeter Einheit in R1.",
+            "High Velocity": "Verteidiger kann keine Dodge-Marker ausgeben.",
+            "Hover": "Kann Bodenkontakt oder schwebend sein.",
+            "Immune: Force": "Kann nicht von Machtfähigkeiten beeinflusst werden.",
+            "Immune: Pierce": "Pierce hat keine Wirkung auf diese Einheit.",
+            "Impact X": "Ändere bis zu X Treffer zu Crits gegen Panzerung.",
+            "Impervious": "Pierce hat keine Wirkung auf diese Einheit.",
+            "Infiltrate": "Aufstellung überall jenseits von Reichweite 3 zu Gegnern.",
+            "Inspire X": "Entferne X Suppression von befreundeten Einheiten in R2.",
+            "Ion X": "Ziel erhält X Ion-Marker. Fahrzeuge verlieren Aktionen.",
+            "Jump X": "Ignoriere Gelände und Einheiten bis Höhe X bei Bewegung.",
+            "Lethal X": "Wenn Aim ausgegeben: Wandle X Surges in Crits.",
+            "Low Profile": "1 Würfel weniger werfen, +1 Block zum Deckungspool.",
+            "Marksman": "Kann Attack-Surge in Crit umwandeln.",
+            "Master of the Force X": "Regeneriere X Machtfähigkeits-Karten.",
+            "Nimble": "Wenn Dodge ausgegeben wurde: Erhalte 1 Dodge zurück.",
+            "Outmaneuver": "Behalte leichte Deckung auch wenn bewegt.",
+            "Pierce X": "Negiere bis zu X Block-Ergebnisse.",
+            "Poison X": "Ziel erhält X Gift-Marker. Reduziert Verteidigung.",
+            "Precise X": "Wenn Aim ausgegeben: Reroll X zusätzliche Würfel.",
+            "Prepared Positions": "Erhält nach Aufstellung 1 Dodge-Token.",
+            "Regenerate X": "Stelle bis zu X entfernte Minis wieder her.",
+            "Relentless": "Nach Bewegung: Freie Attacke.",
+            "Repair X": "Entferne bis zu X Wunden/Ion-Marker von Fahrzeugen.",
+            "Reposition": "Darf nach Angriff eine Speed-1 Bewegung durchführen.",
+            "Scale": "Kann als Teil der Bewegung klettern ohne extra Aktion.",
+            "Scout X": "Nach Aufstellung: Freie Bewegung Speed-X.",
+            "Sentinel": "Größere Standby-Reichweite (R3).",
+            "Sharpshooter X": "Reduziere Deckung des Verteidigers um X.",
+            "Speeder X": "Muss sich jede Runde bewegen. Ignoriert schwieriges Gelände.",
+            "Spray": "Addiere Würfel für jede Mini in der Zieleinheit.",
+            "Spur": "Kann zusätzliche Bewegung durchführen, erhält Suppression.",
+            "Stationary": "Kann keine Bewegungsaktionen durchführen.",
+            "Steady": "Nach Bewegung: Freie Fernkampf-Attacke.",
+            "Suppressive": "Verteidiger erhält mindestens 1 Suppression.",
+            "Tactical X": "Erhalte X Aim-Marker nach Standardbewegung.",
+            "Target X": "Erhalte X Aim-Tokens beim Angriff auf markierte Einheit.",
+            "Transport": "Kann Einheiten transportieren.",
+            "Treat X": "Entferne bis zu X Wunden/Gift-Marker von Truppen.",
+            "Uncanny Luck X": "Darf bis zu X Verteidigungswürfel neu würfeln.",
+            "Unhindered": "Ignoriert schwieriges Gelände.",
+            "Versatile": "Kann Nahkampfwaffen im Fernkampf nutzen und umgekehrt."
         }
         return descriptions.get(keyword, "")
 
@@ -1404,6 +1528,15 @@ class GameCompanion:
         self.start_command_phase()
 
     def start_command_phase(self):
+        """
+        Kommandophase gemäß offiziellem Regelwerk:
+        1. Kommandokarten verdeckt auswählen
+        2. Kommandokarten gleichzeitig aufdecken
+        3. Karteneffekte abhandeln (niedrigste Pips zuerst)
+        4. Priorität ermitteln (weniger Pips = Priorität)
+        5. Befehle an Einheiten erteilen
+        6. Befehlspool bilden
+        """
         self.current_phase = "Command"
         self.log_event(f"--- START ROUND {self.round_number}: COMMAND PHASE ---")
 
@@ -1415,10 +1548,22 @@ class GameCompanion:
         # UI
         for widget in self.frame_center.winfo_children(): widget.destroy()
 
-        tk.Label(self.frame_center, text=f"RUNDE {self.round_number}: Kommandophase", font=("Segoe UI", 16, "bold")).pack(pady=10)
+        # Phase-Header mit Regelinformationen
+        header_frame = tk.Frame(self.frame_center, bg="#1976D2", pady=10)
+        header_frame.pack(fill="x")
+        
+        tk.Label(header_frame, text=f"RUNDE {self.round_number}: Kommandophase", 
+                font=("Segoe UI", 16, "bold"), fg="white", bg="#1976D2").pack()
+        
+        # Zeige Regelschritte
+        phase_info = self.rules.PHASES.get("command", {})
+        if phase_info.get("steps"):
+            steps_text = " → ".join(phase_info["steps"][:4])  # Erste 4 Schritte
+            tk.Label(header_frame, text=steps_text, font=("Segoe UI", 9), 
+                    fg="#BBDEFB", bg="#1976D2", wraplength=800).pack(pady=2)
 
         # 1. Select Card
-        tk.Label(self.frame_center, text="Wähle deine Kommandokarte:", font=("Segoe UI", 12)).pack()
+        tk.Label(self.frame_center, text="Wähle deine Kommandokarte:", font=("Segoe UI", 12)).pack(pady=10)
 
         frame_cards = tk.Frame(self.frame_center)
         frame_cards.pack(pady=10)
@@ -2087,11 +2232,30 @@ class GameCompanion:
         self.start_turn()
 
     def start_turn(self):
+        """
+        Aktivierungsphase-Zug gemäß offiziellem Regelwerk:
+        1. Spieler wählt (Priorität zuerst oder passt)
+        2. Einheit zur Aktivierung wählen (Befehlsmarker oder aus Pool)
+        3. Einheit aktivieren: Rally → 2 Aktionen → End-Effekte
+        """
         # UI Refresh
         for widget in self.frame_center.winfo_children(): widget.destroy()
 
-        tk.Label(self.frame_center, text=f"RUNDE {self.round_number}: Aktivierungsphase", font=("Segoe UI", 16, "bold")).pack(pady=10)
+        # Phase-Header mit Regelinformationen
+        header_frame = tk.Frame(self.frame_center, bg="#388E3C", pady=10)
+        header_frame.pack(fill="x")
+        
+        tk.Label(header_frame, text=f"RUNDE {self.round_number}: Aktivierungsphase", 
+                font=("Segoe UI", 16, "bold"), fg="white", bg="#388E3C").pack()
+        
+        # Zeige Aktivierungsschritte
+        phase_info = self.rules.PHASES.get("activation", {})
+        if phase_info.get("steps"):
+            steps_summary = "1. Einheit wählen → 2. Rally → 3. Aktionen (2) → 4. Befehlsmarker ablegen"
+            tk.Label(header_frame, text=steps_summary, font=("Segoe UI", 9), 
+                    fg="#C8E6C9", bg="#388E3C").pack(pady=2)
 
+        # Aktueller Spieler
         turn_color = "#2196F3" if self.active_turn_player == "Player" else "#F44336"
         turn_text = "SPIELER AM ZUG" if self.active_turn_player == "Player" else "GEGNER (AI) AM ZUG"
         tk.Label(self.frame_center, text=turn_text, font=("Segoe UI", 20, "bold"), fg=turn_color).pack(pady=10)
@@ -2101,7 +2265,11 @@ class GameCompanion:
         face_up_o = sum(1 for u in self.opponent_army['units'] if u.get('order_token') and not u.get('activated'))
         pool_count = len(self.order_pool)
 
-        tk.Label(self.frame_center, text=f"Pool: {pool_count} | Offene Befehle: P={face_up_p}, G={face_up_o}", bg="#eee", padx=10).pack(pady=5)
+        info_frame = tk.Frame(self.frame_center, bg="#E8F5E9", padx=15, pady=8)
+        info_frame.pack(pady=5, fill="x", padx=20)
+        tk.Label(info_frame, text=f"📋 Befehlspool: {pool_count}", bg="#E8F5E9", font=("Segoe UI", 10)).pack(side="left", padx=10)
+        tk.Label(info_frame, text=f"🔵 Spieler-Befehle: {face_up_p}", bg="#E8F5E9", font=("Segoe UI", 10)).pack(side="left", padx=10)
+        tk.Label(info_frame, text=f"🔴 Gegner-Befehle: {face_up_o}", bg="#E8F5E9", font=("Segoe UI", 10)).pack(side="left", padx=10)
 
         # Actions
         # Check if Human (Player) OR AI is disabled (Human Opponent)
@@ -2166,18 +2334,58 @@ class GameCompanion:
         self.activate_unit(token["unit"], "Opponent")
 
     def ai_take_turn(self):
-        # AI Logic
-        # 1. Face Up?
-        candidates_face_up = [u for u in self.opponent_army["units"] if u.get("order_token") and not u.get("activated") and u["current_hp"] > 0]
+        """
+        KI-Zuggentscheidung gemäß Star Wars Legion Regeln.
+        Nutzt AIDecisionMaker aus GameEngine wenn verfügbar.
+        """
+        # 1. Face Up Token Units haben Priorität
+        candidates_face_up = [u for u in self.opponent_army["units"] 
+                             if u.get("order_token") and not u.get("activated") and u["current_hp"] > 0]
 
         unit_to_activate = None
 
         if candidates_face_up:
-            # Pick highest rank
-            # Sort logic...
-            unit_to_activate = candidates_face_up[0] # Simplification
+            # Nutze GameEngine für bessere Auswahl
+            if self.ai_decision_maker:
+                # Bewerte jede Einheit nach taktischem Wert
+                best_unit = None
+                best_score = -1
+                
+                for unit in candidates_face_up:
+                    # Rang-basierte Priorität
+                    rank_scores = {
+                        "Commander": 10, "Operative": 8, 
+                        "Special Forces": 6, "Corps": 4,
+                        "Support": 5, "Heavy": 7
+                    }
+                    score = rank_scores.get(unit.get("rank", "Corps"), 4)
+                    
+                    # Keywords analysieren für taktische Situationen
+                    keywords = unit.get("keywords", [])
+                    for kw in keywords:
+                        kw_str = str(kw)
+                        if "Charge" in kw_str or "Relentless" in kw_str:
+                            score += 3  # Aggressive Einheiten früher aktivieren
+                        if "Sharpshooter" in kw_str:
+                            score += 2  # Fernkampf-Spezialisten
+                        if "Danger Sense" in kw_str:
+                            score += 1  # Suppression-abhängige Einheiten
+                    
+                    # Wenig HP = höhere Priorität (finish before eliminated)
+                    hp_percent = unit.get("current_hp", 1) / max(unit.get("hp", 1), 1)
+                    if hp_percent < 0.5:
+                        score += 2
+                    
+                    if score > best_score:
+                        best_score = score
+                        best_unit = unit
+                
+                unit_to_activate = best_unit if best_unit else candidates_face_up[0]
+            else:
+                # Legacy: einfach erste Einheit
+                unit_to_activate = candidates_face_up[0]
         else:
-            # Draw from pool
+            # Vom Befehlspool ziehen
             ai_tokens = [t for t in self.order_pool if t["side"] == "Opponent"]
             if ai_tokens:
                 token = ai_tokens[0]
@@ -2188,8 +2396,9 @@ class GameCompanion:
             logging.info(f"AI activating unit: {unit_to_activate['name']}")
             self.activate_unit(unit_to_activate, "Opponent")
         else:
-            # No units left? Check if player has units - if yes, pass turn, if no, end phase
-            p_face_up = any(u.get("order_token") and not u.get("activated") and u["current_hp"] > 0 for u in self.player_army["units"])
+            # Keine Einheiten mehr - prüfe ob Spieler noch welche hat
+            p_face_up = any(u.get("order_token") and not u.get("activated") and u["current_hp"] > 0 
+                          for u in self.player_army["units"])
             p_pool = any(t["side"] == "Player" for t in self.order_pool)
             p_rem = p_face_up or p_pool
             
@@ -2241,6 +2450,9 @@ class GameCompanion:
 
         tk.Label(self.frame_center, text=f"AKTIV: {unit['name']}", font=("Segoe UI", 18, "bold"), fg=("blue" if side=="Player" else "red")).pack(pady=10)
 
+        # 0. Kartenbild anzeigen (wenn verknüpft)
+        self.display_active_unit_card(unit)
+
         # 1. Start of Activation Effects (Placeholder)
 
         # 2. Rally Step
@@ -2251,20 +2463,112 @@ class GameCompanion:
 
         # AI automation is triggered within update_actions_ui()
 
+    def display_active_unit_card(self, unit):
+        """Zeigt das Kartenbild der aktiven Einheit im Spielfenster an"""
+        card_image_path = self.get_unit_card_image_path(unit)
+        
+        if card_image_path and os.path.exists(card_image_path):
+            try:
+                # Frame für Kartenbild
+                card_frame = tk.Frame(self.frame_center, bg="#222", relief="ridge", bd=2)
+                card_frame.pack(pady=5, padx=10, fill="x")
+                
+                # Bild laden und skalieren (klein, Thumbnail-Größe für im Spiel)
+                img = Image.open(card_image_path)
+                img.thumbnail((180, 100), Image.LANCZOS)
+                
+                self.active_unit_card_image = ImageTk.PhotoImage(img)
+                
+                lbl_card = tk.Label(card_frame, image=self.active_unit_card_image, bg="#222")
+                lbl_card.pack(side="left", padx=5, pady=5)
+                
+                # Button zum Vergrößern
+                btn_enlarge = tk.Button(card_frame, text="🔍", 
+                                       command=lambda p=card_image_path: self.show_enlarged_unit_card(p),
+                                       font=("Segoe UI", 12))
+                btn_enlarge.pack(side="right", padx=5)
+                
+            except Exception as e:
+                logging.warning(f"Kartenbild konnte nicht geladen werden: {e}")
+
+    def show_enlarged_unit_card(self, image_path):
+        """Zeigt das Einheiten-Kartenbild vergrößert in einem neuen Fenster"""
+        if not os.path.exists(image_path):
+            return
+        
+        try:
+            enlarge_window = tk.Toplevel(self.root)
+            enlarge_window.title(f"Kartenbild - {self.active_unit.get('name', 'Einheit')}")
+            enlarge_window.geometry("850x650")
+            enlarge_window.configure(bg="#333")
+            
+            # Bild laden
+            img = Image.open(image_path)
+            
+            # Skalieren wenn nötig
+            max_w, max_h = 800, 550
+            if img.width > max_w or img.height > max_h:
+                img.thumbnail((max_w, max_h), Image.LANCZOS)
+            
+            enlarged_img = ImageTk.PhotoImage(img)
+            
+            # Überschrift
+            tk.Label(enlarge_window, text=self.active_unit.get('name', 'Einheit'),
+                    font=("Segoe UI", 16, "bold"), bg="#333", fg="white").pack(pady=5)
+            
+            # Bild Label
+            lbl_img = tk.Label(enlarge_window, image=enlarged_img, bg="#333")
+            lbl_img.image = enlarged_img
+            lbl_img.pack(expand=True, pady=10)
+            
+            # Einheiten-Statistiken
+            stats_frame = tk.Frame(enlarge_window, bg="#444")
+            stats_frame.pack(fill="x", pady=5, padx=10)
+            
+            hp = self.active_unit.get('current_hp', self.active_unit.get('hp', '?'))
+            max_hp = self.active_unit.get('hp', '?')
+            supp = self.active_unit.get('suppression', 0)
+            aim = self.active_unit.get('aim', 0)
+            dodge = self.active_unit.get('dodge', 0)
+            
+            stats_text = f"❤️ HP: {hp}/{max_hp}  |  📉 Niederhalten: {supp}  |  🎯 Zielen: {aim}  |  💨 Ausweichen: {dodge}"
+            tk.Label(stats_frame, text=stats_text, font=("Segoe UI", 11), bg="#444", fg="white").pack(pady=5)
+            
+            # Schließen-Button
+            btn_close = tk.Button(enlarge_window, text="Schließen", command=enlarge_window.destroy,
+                                bg="#f44336", fg="white", font=("Segoe UI", 10))
+            btn_close.pack(pady=10)
+            
+        except Exception as e:
+            logging.error(f"Fehler beim Vergrößern des Kartenbilds: {e}")
+
     def perform_rally(self, unit):
+        """
+        Führt Rally-Schritt gemäß offiziellen Regeln durch.
+        - Würfelt weiße Verteidigungswürfel gleich der Anzahl Suppression-Marker
+        - Für jedes Block oder Surge: 1 Suppression entfernen
+        - Prüft Suppressed/Panic Status
+        """
         suppression = unit.get("suppression", 0)
         courage = unit.get("courage", "-")
 
-        # Remove suppression = Roll white dice equal to suppression
+        # Rally mit GameEngine wenn verfügbar
         if suppression > 0:
-            removed = 0
-            # Sim roll
-            for _ in range(suppression):
-                r = random.randint(1, 6)
-                if r in [1, 2]: # Block or Surge (approx for White Defense Rally?)
-                    # Rally rule: "Werfe 1 weißen Verteidigungswürfel für jeden Niederhalten-Marker. Für jede Abwehr oder Verteidigungsenergie entfernt sie 1."
-                    # White Def: 1 Block, 1 Surge. Faces 1, 2. (Assuming 1-6 map: 1=Block, 2=Surge, 3-6=Blank)
-                    removed += 1
+            if self.unit_state_manager:
+                # Nutze GameEngine für korrektes Rally
+                rally_result = self.unit_state_manager.perform_rally(unit)
+                removed = rally_result["removed"]
+                
+                # Log Rally-Ergebnis
+                self.log_event(f"Rally: {unit['name']} würfelt {rally_result['dice_rolled']} Würfel, entfernt {removed} Suppression (verbleibend: {rally_result['remaining']})")
+            else:
+                # Fallback: Legacy-Würfelsystem
+                removed = 0
+                for _ in range(suppression):
+                    r = random.randint(1, 6)
+                    if r in [1, 2]:  # Block oder Surge (weiße Verteidigung)
+                        removed += 1
+                unit["suppression"] = max(0, suppression - removed)
 
             unit["suppression"] = max(0, suppression - removed)
             # Log?
@@ -3387,35 +3691,55 @@ class GameCompanion:
         tk.Button(top, text=f"Bewegung durchführen (Max Speed {max_speed})", command=confirm_move, bg="#4CAF50", fg="white").pack(pady=20)
 
     def end_phase(self):
+        """
+        Endphase gemäß offiziellem Regelwerk:
+        1. Endphasen-Start-Effekte
+        2. Siegpunkte werten
+        3. Kommandokarten ablegen
+        4. Marker entfernen (Aim, Dodge, Standby, 1 Suppression)
+        5. Befehlspool aktualisieren / Einheiten befördern
+        6. End-Effekte
+        7. Rundenzähler vorstellen
+        """
         self.current_phase = "End"
         self.log_event(f"--- END PHASE (Round {self.round_number}) ---")
         for widget in self.frame_center.winfo_children(): widget.destroy()
 
         tk.Label(self.frame_center, text=f"Ende Runde {self.round_number}", font=("Segoe UI", 20, "bold")).pack(pady=20)
 
-        # 1. Cleanup
+        # Cleanup mit GameEngine wenn verfügbar
         log = []
         all_units = self.player_army["units"] + self.opponent_army["units"]
-        for u in all_units:
-            # Remove Green Tokens
-            if u.get("aim", 0) > 0: u["aim"] = 0
-            if u.get("dodge", 0) > 0: u["dodge"] = 0
-            if u.get("standby"): u["standby"] = False
-
-            # Remove 1 Suppression
-            if u.get("suppression", 0) > 0:
-                u["suppression"] -= 1
-
-            # Reset Activation
-            u["activated"] = False
-            u["order_token"] = False
-
-        log.append("• Marker entfernt (Zielen, Ausweichen, Bereitschaft).")
-        log.append("• 1 Niederhalten-Marker von jeder Einheit entfernt.")
-        log.append("• Alle Einheiten bereitgemacht.")
-        log.append("• Kommandokarten abgelegt.")
         
-        # LOGGING
+        for u in all_units:
+            if self.unit_state_manager:
+                # Nutze GameEngine für korrektes Cleanup
+                cleanup_result = self.unit_state_manager.end_phase_cleanup(u)
+                if cleanup_result.get("changes"):
+                    for change in cleanup_result["changes"]:
+                        logging.debug(f"Cleanup {u['name']}: {change}")
+            else:
+                # Legacy Cleanup
+                if u.get("aim", 0) > 0: u["aim"] = 0
+                if u.get("dodge", 0) > 0: u["dodge"] = 0
+                if u.get("standby"): u["standby"] = False
+                if u.get("suppression", 0) > 0:
+                    u["suppression"] -= 1
+                u["activated"] = False
+                u["order_token"] = False
+
+        # Regelgerechte Endphasen-Schritte anzeigen
+        phase_steps = self.rules.PHASES.get("end", {}).get("steps", [])
+        if phase_steps:
+            log.append("📋 Durchgeführte Schritte:")
+            for step in phase_steps[:6]:  # Erste 6 Schritte
+                log.append(f"  ✓ {step}")
+        else:
+            log.append("• Marker entfernt (Zielen, Ausweichen, Bereitschaft).")
+            log.append("• 1 Niederhalten-Marker von jeder Einheit entfernt.")
+            log.append("• Alle Einheiten bereitgemacht.")
+            log.append("• Kommandokarten abgelegt.")
+        
         self.log_event("End Phase Cleanup completed. Tokens removed, units reset.")
 
 

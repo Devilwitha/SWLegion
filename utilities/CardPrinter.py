@@ -61,6 +61,9 @@ class CardPrinter:
 
         btn_save = tk.Button(top_frame, text="Als Bild speichern", command=self.save_image, bg="#4CAF50", fg="white", font=("Segoe UI", 9, "bold"))
         btn_save.pack(side=tk.LEFT, padx=5)
+        
+        btn_link = tk.Button(top_frame, text="Speichern & Verknüpfen", command=self.save_and_link_image, bg="#FF9800", fg="white", font=("Segoe UI", 9, "bold"))
+        btn_link.pack(side=tk.LEFT, padx=5)
 
         # Image Controls Frame
         ctrl_frame = tk.Frame(self.root, pady=5, padx=10, bg="#ccc")
@@ -360,6 +363,72 @@ class CardPrinter:
         if f:
             self.generated_image.save(f)
             messagebox.showinfo("Gespeichert", f"Bild gespeichert unter {f}")
+
+    def save_and_link_image(self):
+        """Speichert das Bild im db/card_images Ordner und verknüpft es mit der Einheit/Karte"""
+        if not hasattr(self, "generated_image"):
+            messagebox.showerror("Fehler", "Bitte erst eine Vorschau erstellen!")
+            return
+
+        data, mode = self.get_selected_data()
+        if not data:
+            messagebox.showerror("Fehler", "Kein Objekt ausgewählt!")
+            return
+
+        # Bestimme Dateiname basierend auf ID oder Name
+        if mode == "unit":
+            obj_id = data.get("id", data.get("name", "unknown"))
+            json_file = self.custom_units_file
+            data_list = self.units_data
+        elif mode == "card":
+            obj_id = data.get("id", data.get("name", "unknown"))
+            json_file = self.custom_cards_file
+            data_list = self.cards_data
+        elif mode == "upgrade":
+            obj_id = data.get("id", data.get("name", "unknown"))
+            json_file = self.custom_upgrades_file
+            data_list = self.upgrades_data
+        elif mode == "battle":
+            obj_id = data.get("id", data.get("name", "unknown"))
+            json_file = self.custom_battle_file
+            data_list = self.battle_data
+        else:
+            messagebox.showerror("Fehler", "Unbekannter Objekttyp!")
+            return
+
+        # Sanitize ID für Dateiname
+        safe_id = str(obj_id).replace(" ", "_").replace("/", "_").replace("\\", "_")
+        
+        # Speichere Bild
+        card_images_dir = "db/card_images"
+        if not os.path.exists(card_images_dir):
+            os.makedirs(card_images_dir)
+        
+        image_filename = f"{safe_id}.png"
+        image_path = os.path.join(card_images_dir, image_filename)
+        
+        self.generated_image.save(image_path)
+        
+        # Update JSON mit card_image Pfad
+        try:
+            for item in data_list:
+                if mode == "unit":
+                    item_data = item.get("unit_data", {})
+                    if item_data.get("id") == obj_id or item_data.get("name") == data.get("name"):
+                        item["card_image"] = image_path
+                        break
+                else:
+                    if item.get("id") == obj_id or item.get("name") == data.get("name"):
+                        item["card_image"] = image_path
+                        break
+            
+            # Speichere JSON
+            with open(json_file, "w", encoding="utf-8") as f:
+                json.dump(data_list, f, indent=4, ensure_ascii=False)
+            
+            messagebox.showinfo("Verknüpft", f"Bild gespeichert und mit '{data.get('name', 'Objekt')}' verknüpft!\n\nPfad: {image_path}")
+        except Exception as e:
+            messagebox.showerror("Fehler", f"Fehler beim Verknüpfen: {e}")
 
 if __name__ == "__main__":
     root = tk.Tk()

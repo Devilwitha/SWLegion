@@ -271,6 +271,10 @@ class LegionDatabase:
 
                 # Mark as custom (optional, helps UI)
                 unit_data["is_custom"] = True
+                
+                # Kartenbild-Pfad übernehmen wenn vorhanden
+                if entry.get("card_image"):
+                    unit_data["card_image"] = entry["card_image"]
 
                 for faction in factions:
                     if faction not in self.units:
